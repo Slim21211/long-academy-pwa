@@ -94,6 +94,7 @@ export default function About() {
             ) : !videoError ? (
               <video
                 key={videoKey}
+                autoPlay
                 controls
                 playsInline
                 preload="metadata"
