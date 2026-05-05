@@ -1,0 +1,91 @@
+@use '../../styles/variables' as *;
+
+.card {
+  display: flex;
+  align-items: center;
+  gap: $space-3;
+  padding: $space-4;
+  background: $color-surface;
+  border-radius: $radius-md;
+  border: 1px solid $color-border-light;
+  box-shadow: $shadow-sm;
+  animation: fadeSlideIn $transition-slow both;
+
+  @include desktop {
+    padding: $space-4 $space-5;
+    gap: $space-4;
+  }
+}
+
+.iconWrap {
+  flex-shrink: 0;
+  width: 40px;
+  height: 40px;
+  border-radius: $radius-sm;
+  background: $color-primary-bg;
+  color: $color-primary;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.name {
+  flex: 1;
+  font-size: $font-size-sm;
+  font-weight: $font-weight-semibold;
+  color: $color-text;
+  line-height: $line-height-normal;
+
+  @include desktop {
+    font-size: $font-size-base;
+  }
+}
+
+.actions {
+  display: flex;
+  gap: $space-2;
+  flex-shrink: 0;
+}
+
+.btn {
+  display: flex;
+  align-items: center;
+  gap: $space-1;
+  padding: $space-2 $space-3;
+  border-radius: $radius-sm;
+  font-size: $font-size-xs;
+  font-weight: $font-weight-semibold;
+  font-family: inherit;
+  transition: all $transition-fast;
+  white-space: nowrap;
+
+  span {
+    @include mobile {
+      display: none;
+    }
+  }
+
+  &:active {
+    transform: scale(0.95);
+  }
+}
+
+.btnPrimary {
+  background: $color-primary;
+  color: white;
+
+  &:hover {
+    background: $color-primary-light;
+  }
+}
+
+.btnSecondary {
+  background: $color-surface-2;
+  color: $color-text-secondary;
+  border: 1px solid $color-border;
+
+  &:hover {
+    background: $color-border-light;
+    color: $color-text;
+  }
+}

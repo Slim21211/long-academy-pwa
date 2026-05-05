@@ -1,0 +1,79 @@
+@use '../../styles/variables' as *;
+
+.header {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  background: $color-surface;
+  border-bottom: 1px solid $color-border-light;
+  box-shadow: $shadow-sm;
+  padding-top: env(safe-area-inset-top, 0px);
+}
+
+.inner {
+  display: flex;
+  align-items: center;
+  gap: $space-3;
+  padding: 0 $space-4;
+  height: $header-height;
+  max-width: $max-width-desktop;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.logoWrap {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+}
+
+.backBtn {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: $radius-full;
+  color: $color-primary;
+  background: $color-primary-bg;
+  transition: background $transition-fast, transform $transition-fast;
+
+  &:hover {
+    background: color-mix(in srgb, #EBF5EE 90%, #2D7A50 10%);
+  }
+
+  &:active {
+    transform: scale(0.92);
+  }
+}
+
+.titleWrap {
+  flex: 1;
+  min-width: 0;
+  text-align: center;
+}
+
+.title {
+  font-size: $font-size-md;
+  font-weight: $font-weight-bold;
+  color: $color-text;
+  @include truncate;
+  line-height: $line-height-tight;
+
+  @include desktop {
+    font-size: $font-size-lg;
+  }
+}
+
+.subtitle {
+  font-size: $font-size-xs;
+  color: $color-text-secondary;
+  margin-top: 1px;
+  @include truncate;
+}
+
+.spacer {
+  width: 40px;
+  flex-shrink: 0;
+}

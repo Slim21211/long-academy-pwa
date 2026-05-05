@@ -1,0 +1,122 @@
+// ─── Colors ───────────────────────────────────────────────────────────────────
+$color-primary:       #2D7A50;
+$color-primary-light: #3D9966;
+$color-primary-dark:  #1D5438;
+$color-primary-bg:    #EBF5EE;
+
+$color-accent:        #E07B3A;
+$color-accent-light:  #F5956A;
+$color-accent-dark:   #C0612A;
+
+$color-bg:            #F4F7F5;
+$color-surface:       #FFFFFF;
+$color-surface-2:     #F0F4F1;
+
+$color-text:          #1A2E24;
+$color-text-secondary:#5A7268;
+$color-text-muted:    #8FA89A;
+
+$color-border:        #D5E8DC;
+$color-border-light:  #E8F2EB;
+
+$color-danger:        #D64545;
+$color-warning:       #E8A020;
+$color-success:       #2D7A50;
+
+// ─── Typography ───────────────────────────────────────────────────────────────
+$font-family: 'Manrope', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+
+$font-size-xs:   11px;
+$font-size-sm:   13px;
+$font-size-base: 15px;
+$font-size-md:   17px;
+$font-size-lg:   20px;
+$font-size-xl:   24px;
+$font-size-2xl:  30px;
+
+$font-weight-regular: 400;
+$font-weight-medium:  500;
+$font-weight-semibold:600;
+$font-weight-bold:    700;
+$font-weight-extrabold:800;
+
+$line-height-tight:  1.2;
+$line-height-normal: 1.5;
+$line-height-relaxed:1.7;
+
+// ─── Spacing ──────────────────────────────────────────────────────────────────
+$space-1:  4px;
+$space-2:  8px;
+$space-3:  12px;
+$space-4:  16px;
+$space-5:  20px;
+$space-6:  24px;
+$space-8:  32px;
+$space-10: 40px;
+$space-12: 48px;
+$space-16: 64px;
+
+// ─── Layout ───────────────────────────────────────────────────────────────────
+$max-width-mobile:  480px;
+$max-width-tablet:  768px;
+$max-width-desktop: 1100px;
+$max-width-content: 640px;
+
+$header-height:        60px;
+$install-banner-height: 80px;
+
+// ─── Borders & Radius ─────────────────────────────────────────────────────────
+$radius-sm:   8px;
+$radius-md:   12px;
+$radius-lg:   16px;
+$radius-xl:   20px;
+$radius-full: 9999px;
+
+// ─── Shadows ──────────────────────────────────────────────────────────────────
+$shadow-sm:  0 1px 3px rgba(0, 0, 0, 0.08), 0 1px 2px rgba(0, 0, 0, 0.06);
+$shadow-md:  0 4px 12px rgba(0, 0, 0, 0.08), 0 2px 4px rgba(0, 0, 0, 0.06);
+$shadow-lg:  0 8px 24px rgba(0, 0, 0, 0.10), 0 4px 8px rgba(0, 0, 0, 0.06);
+
+// ─── Transitions ──────────────────────────────────────────────────────────────
+$transition-fast:   0.15s ease;
+$transition-normal: 0.25s ease;
+$transition-slow:   0.4s ease;
+
+// ─── Breakpoints ──────────────────────────────────────────────────────────────
+$bp-sm:  480px;
+$bp-md:  768px;
+$bp-lg:  1024px;
+$bp-xl:  1280px;
+
+// ─── Mixins ───────────────────────────────────────────────────────────────────
+@mixin mobile { @media (max-width: #{$bp-sm - 1px}) { @content; } }
+@mixin tablet { @media (min-width: $bp-sm) and (max-width: #{$bp-md - 1px}) { @content; } }
+@mixin tablet-up { @media (min-width: $bp-sm) { @content; } }
+@mixin desktop { @media (min-width: $bp-md) { @content; } }
+@mixin desktop-lg { @media (min-width: $bp-lg) { @content; } }
+
+@mixin safe-bottom { padding-bottom: env(safe-area-inset-bottom, 0px); }
+@mixin safe-top { padding-top: env(safe-area-inset-top, 0px); }
+
+@mixin focus-ring {
+  outline: 2px solid $color-primary;
+  outline-offset: 2px;
+}
+
+@mixin truncate {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@mixin card-hover {
+  transition: transform $transition-normal, box-shadow $transition-normal;
+  &:hover {
+    transform: translateY(-2px);
+    box-shadow: $shadow-lg;
+  }
+  &:active {
+    transform: translateY(0);
+    box-shadow: $shadow-sm;
+  }
+}

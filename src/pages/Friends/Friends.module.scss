@@ -1,0 +1,54 @@
+@use '../../styles/variables' as *;
+
+.page {
+  display: flex;
+  flex-direction: column;
+  min-height: 100dvh;
+}
+
+.main {
+  flex: 1;
+  padding: $space-6 $space-4 $space-10;
+  max-width: $max-width-content;
+  margin: 0 auto;
+  width: 100%;
+
+  @include desktop {
+    padding: $space-8 $space-6 $space-12;
+    max-width: $max-width-tablet;
+  }
+}
+
+.imageCard {
+  border-radius: $radius-lg;
+  overflow: hidden;
+  box-shadow: $shadow-md;
+  margin-bottom: $space-5;
+  background: $color-surface-2;
+}
+
+.image {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+
+.info {
+  background: $color-surface;
+  border-radius: $radius-lg;
+  padding: $space-5;
+  border: 1px solid $color-border-light;
+}
+
+.heading {
+  font-size: $font-size-md;
+  font-weight: $font-weight-bold;
+  color: $color-text;
+  margin-bottom: $space-3;
+}
+
+.text {
+  font-size: $font-size-base;
+  color: $color-text-secondary;
+  line-height: $line-height-relaxed;
+}
