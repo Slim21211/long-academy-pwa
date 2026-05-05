@@ -3,6 +3,14 @@ import Header from '../../components/Header';
 import { VIDEO, PDF } from '../../data/links';
 import styles from './About.module.scss';
 
+function PlayIcon() {
+  return (
+    <svg width="32" height="32" viewBox="0 0 24 24" fill="currentColor">
+      <path d="M8 5v14l11-7z" />
+    </svg>
+  );
+}
+
 function DocumentIcon() {
   return (
     <svg
@@ -43,7 +51,19 @@ function OpenIcon() {
 }
 
 export default function About() {
+  const [videoVisible, setVideoVisible] = useState(false);
   const [videoError, setVideoError] = useState(false);
+  const [videoKey, setVideoKey] = useState(0);
+
+  const handleShowVideo = () => {
+    setVideoVisible(true);
+    setVideoError(false);
+  };
+
+  const handleRetry = () => {
+    setVideoError(false);
+    setVideoKey((k) => k + 1);
+  };
 
   return (
     <div className={`${styles.page} page-enter`}>
@@ -54,53 +74,53 @@ export default function About() {
           Посмотрите медиаматериалы, чтобы больше узнать о нашей компании
         </p>
 
-        {/* Video section */}
         <section className={styles.section}>
           <h2 className={styles.sectionTitle}>Видео о компании</h2>
 
           <div className={styles.videoCard}>
-            {!videoError ? (
+            {!videoVisible ? (
+              <button
+                className={styles.videoPreview}
+                onClick={handleShowVideo}
+                aria-label="Воспроизвести видео о компании"
+              >
+                <div className={styles.videoThumb}>
+                  <div className={styles.playBtn}>
+                    <PlayIcon />
+                  </div>
+                  <p className={styles.videoLabel}>Нажмите, чтобы посмотреть</p>
+                </div>
+              </button>
+            ) : !videoError ? (
               <video
-                src={VIDEO.ABOUT}
+                key={videoKey}
                 controls
                 playsInline
                 preload="metadata"
                 className={styles.video}
                 onError={() => setVideoError(true)}
+                onLoadStart={() => setVideoError(false)}
                 aria-label="Видео о компании Академия Долголетия"
-              />
+              >
+                <source src={`${VIDEO.ABOUT}?v=${videoKey}`} type="video/mp4" />
+                <track kind="captions" />
+              </video>
             ) : (
-              // Если <video> не смог загрузить файл (iOS + CDN без range requests)
-              // — показываем кнопку, которая открывает mp4 напрямую в Safari.
-              // Нативный плеер iOS обрабатывает это без проблем.
               <div className={styles.videoFallback}>
                 <p className={styles.videoFallbackText}>
-                  Встроенный плеер недоступен в этом браузере
+                  Не удалось загрузить видео
                 </p>
-                <a
-                  href={VIDEO.ABOUT}
-                  target="_blank"
-                  rel="noopener noreferrer"
+                <button
+                  onClick={handleRetry}
                   className={styles.videoFallbackBtn}
                 >
-                  ▶ Открыть видео
-                </a>
+                  🔄 Повторить
+                </button>
               </div>
             )}
           </div>
-
-          {/* Постоянная ссылка для iOS — открывает видео в нативном плеере Safari */}
-          <a
-            href={VIDEO.ABOUT}
-            target="_blank"
-            rel="noopener noreferrer"
-            className={styles.videoExternalLink}
-          >
-            Открыть видео в браузере →
-          </a>
         </section>
 
-        {/* Mission PDF */}
         <section className={styles.section}>
           <h2 className={styles.sectionTitle}>Документы</h2>
           <a
