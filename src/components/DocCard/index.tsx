@@ -65,29 +65,52 @@ function DownloadIcon() {
   );
 }
 
-// GitHub raw CDN отдаёт PDF с Content-Disposition: attachment,
-// из-за чего iOS Safari на телефоне скачивает вместо открытия.
-// Google Docs Viewer обходит это ограничение на всех устройствах.
-function getViewerUrl(pdfUrl: string): string {
-  return `https://docs.google.com/viewer?url=${encodeURIComponent(pdfUrl)}`;
-}
-
-// Скачать: на iOS — нативный шаринг (сохранить в Файлы / AirDrop).
-// На desktop/Android — fetch + blob URL.
-async function downloadPdf(url: string, name: string): Promise<void> {
-  if (navigator.share) {
-    try {
-      await navigator.share({ title: name, url });
-      return;
-    } catch {
-      // Пользователь отменил — падаем на fetch
-    }
+// ─── Открыть ──────────────────────────────────────────────────────────────────
+// Проблема: GitHub raw отдаёт PDF с Content-Disposition: attachment,
+// что заставляет браузер скачивать вместо открытия на iOS mobile.
+//
+// Решение: открыть пустое окно СИНХРОННО (пока браузер считает это
+// жестом пользователя), затем загрузить PDF через fetch → blob URL
+// и перенаправить уже открытое окно. Blob URL — same-origin,
+// Content-Disposition игнорируется → PDF открывается встроенным просмотрщиком.
+async function openPdf(url: string): Promise<void> {
+  // Синхронный window.open — не попадает под блокировщик всплывающих окон
+  const win = window.open('', '_blank');
+  if (!win) {
+    // Заблокировано — открываем в текущей вкладке как фолбэк
+    window.location.href = url;
+    return;
   }
 
+  win.document.write(`
+    <html>
+      <head><title>Загрузка…</title></head>
+      <body style="margin:0;height:100vh;display:flex;align-items:center;
+                   justify-content:center;background:#F4F7F5;
+                   font-family:-apple-system,BlinkMacSystemFont,sans-serif">
+        <p style="color:#5A7268;font-size:16px">Загрузка документа…</p>
+      </body>
+    </html>
+  `);
+
   try {
-    const response = await fetch(url);
-    if (!response.ok) throw new Error('fetch failed');
-    const blob = await response.blob();
+    const res = await fetch(url);
+    if (!res.ok) throw new Error('fetch failed');
+    const blob = await res.blob();
+    const blobUrl = URL.createObjectURL(blob);
+    win.location.href = blobUrl;
+    // Не отзываем blobUrl — он нужен открытой вкладке
+  } catch {
+    // Если fetch упал — навигируем напрямую (хотя бы попробуем)
+    win.location.href = url;
+  }
+}
+
+async function downloadPdf(url: string, name: string): Promise<void> {
+  try {
+    const res = await fetch(url);
+    if (!res.ok) throw new Error('fetch failed');
+    const blob = await res.blob();
     const blobUrl = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = blobUrl;
@@ -102,10 +125,8 @@ async function downloadPdf(url: string, name: string): Promise<void> {
 }
 
 export default function DocCard({ name, url, index }: DocCardProps) {
-  const handleDownload = (e: React.MouseEvent) => {
-    e.preventDefault();
-    void downloadPdf(url, name);
-  };
+  const handleOpen = () => void openPdf(url);
+  const handleDownload = () => void downloadPdf(url, name);
 
   return (
     <article
@@ -119,16 +140,14 @@ export default function DocCard({ name, url, index }: DocCardProps) {
       <p className={styles.name}>{name}</p>
 
       <div className={styles.actions}>
-        <a
-          href={getViewerUrl(url)}
-          target="_blank"
-          rel="noopener noreferrer"
+        <button
+          onClick={handleOpen}
           className={`${styles.btn} ${styles.btnPrimary}`}
           aria-label={`Открыть ${name}`}
         >
           <OpenIcon />
           <span>Открыть</span>
-        </a>
+        </button>
 
         <button
           onClick={handleDownload}

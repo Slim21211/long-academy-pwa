@@ -1,15 +1,6 @@
-import { useState } from 'react';
 import Header from '../../components/Header';
 import { VIDEO, PDF } from '../../data/links';
 import styles from './About.module.scss';
-
-function PlayIcon() {
-  return (
-    <svg width="32" height="32" viewBox="0 0 24 24" fill="currentColor">
-      <path d="M8 5v14l11-7z" />
-    </svg>
-  );
-}
 
 function DocumentIcon() {
   return (
@@ -51,8 +42,6 @@ function OpenIcon() {
 }
 
 export default function About() {
-  const [videoVisible, setVideoVisible] = useState(false);
-
   return (
     <div className={`${styles.page} page-enter`}>
       <Header title="О Компании" showBack backPath="/" />
@@ -66,28 +55,14 @@ export default function About() {
         <section className={styles.section}>
           <h2 className={styles.sectionTitle}>Видео о компании</h2>
           <div className={styles.videoCard}>
-            {!videoVisible ? (
-              <button
-                className={styles.videoPreview}
-                onClick={() => setVideoVisible(true)}
-                aria-label="Воспроизвести видео о компании"
-              >
-                <div className={styles.videoThumb}>
-                  <div className={styles.playBtn}>
-                    <PlayIcon />
-                  </div>
-                  <p className={styles.videoLabel}>Нажмите, чтобы посмотреть</p>
-                </div>
-              </button>
-            ) : (
-              <video
-                src={VIDEO.ABOUT}
-                controls
-                playsInline
-                className={styles.video}
-                aria-label="Видео о компании Академия Долголетия"
-              />
-            )}
+            <video
+              src={VIDEO.ABOUT}
+              controls
+              playsInline
+              preload="metadata"
+              className={styles.video}
+              aria-label="Видео о компании Академия Долголетия"
+            />
           </div>
         </section>
 
