@@ -10,7 +10,7 @@ export default defineConfig({
       includeAssets: ['favicon.svg'],
       manifest: {
         name: 'Академия Долголетия',
-        short_name: 'Академия',
+        short_name: 'Академия Долголетия',
         description: 'Корпоративная база знаний для сотрудников пансионатов',
         theme_color: '#2D7A50',
         background_color: '#F4F7F5',
@@ -42,7 +42,8 @@ export default defineConfig({
         globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
         runtimeCaching: [
           {
-            urlPattern: /^https:\/\/raw\.githubusercontent\.com\/.+\.pdf(\?.*)?$/,
+            urlPattern:
+              /^https:\/\/raw\.githubusercontent\.com\/.+\.pdf(\?.*)?$/,
             handler: 'CacheFirst',
             options: {
               cacheName: 'pdf-cache',
