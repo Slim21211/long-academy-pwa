@@ -51,7 +51,7 @@
   display: block;
   width: 100%;
   aspect-ratio: 16/9;
-  background: linear-gradient(135deg, #1D5438 0%, #2D7A50 60%, #3D9966 100%);
+  background: linear-gradient(135deg, #1d5438 0%, #2d7a50 60%, #3d9966 100%);
   cursor: pointer;
   font-family: inherit;
 }
@@ -99,6 +99,51 @@
   display: block;
   aspect-ratio: 16/9;
   object-fit: contain;
+}
+
+.videoFallback {
+  aspect-ratio: 16/9;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: $space-4;
+  background: #111;
+}
+
+.videoFallbackText {
+  color: rgba(255, 255, 255, 0.6);
+  font-size: $font-size-sm;
+  text-align: center;
+  padding: 0 $space-4;
+}
+
+.videoFallbackBtn {
+  padding: $space-3 $space-6;
+  background: $color-primary;
+  color: white;
+  border-radius: $radius-full;
+  font-size: $font-size-base;
+  font-weight: $font-weight-bold;
+  transition: background $transition-fast;
+
+  &:hover {
+    background: $color-primary-light;
+  }
+}
+
+.videoExternalLink {
+  display: inline-block;
+  margin-top: $space-3;
+  font-size: $font-size-sm;
+  font-weight: $font-weight-semibold;
+  color: $color-primary;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+
+  &:hover {
+    color: $color-primary-light;
+  }
 }
 
 // Doc card

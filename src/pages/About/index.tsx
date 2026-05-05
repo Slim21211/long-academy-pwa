@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import Header from '../../components/Header';
 import { VIDEO, PDF } from '../../data/links';
 import styles from './About.module.scss';
@@ -42,6 +43,8 @@ function OpenIcon() {
 }
 
 export default function About() {
+  const [videoError, setVideoError] = useState(false);
+
   return (
     <div className={`${styles.page} page-enter`}>
       <Header title="О Компании" showBack backPath="/" />
@@ -51,19 +54,50 @@ export default function About() {
           Посмотрите медиаматериалы, чтобы больше узнать о нашей компании
         </p>
 
-        {/* Video card */}
+        {/* Video section */}
         <section className={styles.section}>
           <h2 className={styles.sectionTitle}>Видео о компании</h2>
+
           <div className={styles.videoCard}>
-            <video
-              src={VIDEO.ABOUT}
-              controls
-              playsInline
-              preload="metadata"
-              className={styles.video}
-              aria-label="Видео о компании Академия Долголетия"
-            />
+            {!videoError ? (
+              <video
+                src={VIDEO.ABOUT}
+                controls
+                playsInline
+                preload="metadata"
+                className={styles.video}
+                onError={() => setVideoError(true)}
+                aria-label="Видео о компании Академия Долголетия"
+              />
+            ) : (
+              // Если <video> не смог загрузить файл (iOS + CDN без range requests)
+              // — показываем кнопку, которая открывает mp4 напрямую в Safari.
+              // Нативный плеер iOS обрабатывает это без проблем.
+              <div className={styles.videoFallback}>
+                <p className={styles.videoFallbackText}>
+                  Встроенный плеер недоступен в этом браузере
+                </p>
+                <a
+                  href={VIDEO.ABOUT}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className={styles.videoFallbackBtn}
+                >
+                  ▶ Открыть видео
+                </a>
+              </div>
+            )}
           </div>
+
+          {/* Постоянная ссылка для iOS — открывает видео в нативном плеере Safari */}
+          <a
+            href={VIDEO.ABOUT}
+            target="_blank"
+            rel="noopener noreferrer"
+            className={styles.videoExternalLink}
+          >
+            Открыть видео в браузере →
+          </a>
         </section>
 
         {/* Mission PDF */}
