@@ -8,6 +8,7 @@ import About from './pages/About';
 import Standards from './pages/Standards';
 import Category from './pages/Category';
 import Friends from './pages/Friends';
+import Debug from './pages/Debug';
 
 const PdfViewer = lazy(() => import('./pages/PdfViewer'));
 
@@ -22,6 +23,7 @@ export default function App() {
         <Route path="/standards" element={<Standards />} />
         <Route path="/standards/:categoryId" element={<Category />} />
         <Route path="/friends" element={<Friends />} />
+        <Route path="/debug" element={<Debug />} />
         <Route
           path="/viewer"
           element={

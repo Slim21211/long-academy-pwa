@@ -1,0 +1,108 @@
+@use '../../styles/variables' as *;
+
+.page {
+  min-height: 100dvh;
+  background: $color-bg;
+  display: flex;
+  flex-direction: column;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: $space-4;
+  padding-top: calc(#{$space-4} + env(safe-area-inset-top, 0px));
+  background: $color-surface;
+  border-bottom: 1px solid $color-border-light;
+
+  h1 {
+    font-size: $font-size-md;
+    font-weight: $font-weight-bold;
+  }
+}
+
+.back,
+.refresh {
+  background: $color-primary-bg;
+  color: $color-primary;
+  border-radius: $radius-full;
+  padding: $space-2 $space-3;
+  font-size: $font-size-sm;
+  font-weight: $font-weight-semibold;
+  font-family: inherit;
+  cursor: pointer;
+}
+
+.content {
+  flex: 1;
+  padding: $space-4;
+  max-width: 600px;
+  width: 100%;
+  margin: 0 auto;
+}
+
+.loading {
+  text-align: center;
+  color: $color-text-muted;
+  padding: $space-8;
+}
+
+.empty {
+  padding: $space-3 $space-4;
+  color: $color-text-muted;
+  font-size: $font-size-sm;
+}
+
+.url {
+  padding: $space-2 $space-4;
+  font-size: 11px;
+  color: $color-primary;
+  word-break: break-all;
+  border-bottom: 1px solid $color-border-light;
+
+  &:last-child {
+    border-bottom: none;
+  }
+}
+
+.actions {
+  display: flex;
+  gap: $space-3;
+  margin-bottom: $space-4;
+  flex-wrap: wrap;
+}
+
+.btnGreen {
+  flex: 1;
+  padding: $space-3 $space-4;
+  background: $color-primary;
+  color: white;
+  border-radius: $radius-md;
+  font-size: $font-size-sm;
+  font-weight: $font-weight-bold;
+  font-family: inherit;
+  cursor: pointer;
+}
+
+.btnRed {
+  flex: 1;
+  padding: $space-3 $space-4;
+  background: $color-danger;
+  color: white;
+  border-radius: $radius-md;
+  font-size: $font-size-sm;
+  font-weight: $font-weight-bold;
+  font-family: inherit;
+  cursor: pointer;
+}
+
+.testMsg {
+  text-align: center;
+  font-size: $font-size-sm;
+  font-weight: $font-weight-semibold;
+  color: $color-text;
+  padding: $space-3;
+  background: $color-surface;
+  border-radius: $radius-md;
+}
