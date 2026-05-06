@@ -70,38 +70,53 @@ async function downloadPdf(url: string, name: string): Promise<void> {
 const PADDING = 16;
 const PDF_CACHE_NAME = 'pdf-manual-v1';
 
-// Кэшируем PDF вручную через Cache API — не зависим от SW-перехвата.
-// На iOS fetch из Web Worker не проходит через SW, поэтому Workbox
-// runtimeCaching не работает. Cache API доступен в главном потоке напрямую.
-async function fetchPdfWithCache(url: string): Promise<ArrayBuffer> {
-  // 1. Проверяем кэш
+type LoadSource = 'network' | 'cache';
+
+async function fetchPdfWithCache(
+  url: string
+): Promise<{ buffer: ArrayBuffer; source: LoadSource }> {
+  // ── 1. Читаем из кэша ──────────────────────────────────────────────────────
   if ('caches' in window) {
     try {
       const cache = await caches.open(PDF_CACHE_NAME);
       const cached = await cache.match(url);
       if (cached) {
-        return cached.arrayBuffer();
+        const buffer = await cached.arrayBuffer();
+        return { buffer, source: 'cache' };
       }
     } catch {
       // Cache API недоступен — идём в сеть
     }
   }
 
-  // 2. Загружаем из сети
-  const response = await fetch(url);
+  // ── 2. Загружаем из сети ───────────────────────────────────────────────────
+  const response = await fetch(url, { mode: 'cors', credentials: 'omit' });
   if (!response.ok) throw new Error(`HTTP ${response.status}`);
 
-  // 3. Кладём в кэш (clone — response можно прочитать только один раз)
+  // Читаем тело ПОЛНОСТЬЮ в ArrayBuffer
+  const buffer = await response.arrayBuffer();
+
+  // ── 3. Кладём в кэш ───────────────────────────────────────────────────────
+  // Создаём новый Response из уже прочитанного buffer — так мы точно не
+  // пытаемся читать поток дважды (в отличие от response.clone())
   if ('caches' in window) {
     try {
       const cache = await caches.open(PDF_CACHE_NAME);
-      await cache.put(url, response.clone());
+      await cache.put(
+        url,
+        new Response(buffer.slice(0), {
+          headers: {
+            'Content-Type': 'application/pdf',
+            'Content-Length': String(buffer.byteLength),
+          },
+        })
+      );
     } catch {
-      // Не удалось закэшировать — не критично, просто продолжаем
+      // Не критично
     }
   }
 
-  return response.arrayBuffer();
+  return { buffer, source: 'network' };
 }
 
 export default function PdfViewer() {
@@ -116,6 +131,7 @@ export default function PdfViewer() {
   const [error, setError] = useState(false);
   const [displayScale, setDisplayScale] = useState(1);
   const [pdfData, setPdfData] = useState<{ data: ArrayBuffer } | null>(null);
+  const [loadSource, setLoadSource] = useState<LoadSource | null>(null);
 
   const containerRef = useRef<HTMLDivElement>(null);
   const transformRef = useRef<ReactZoomPanPinchRef>(null);
@@ -127,9 +143,13 @@ export default function PdfViewer() {
     setError(false);
     setPdfData(null);
     setNumPages(0);
+    setLoadSource(null);
 
     fetchPdfWithCache(url)
-      .then((buffer) => setPdfData({ data: buffer }))
+      .then(({ buffer, source }) => {
+        setPdfData({ data: buffer });
+        setLoadSource(source);
+      })
       .catch(() => {
         setIsLoading(false);
         setError(true);
@@ -185,7 +205,18 @@ export default function PdfViewer() {
         >
           <ArrowLeft />
         </button>
-        <h1 className={styles.headerTitle}>{name}</h1>
+        <h1 className={styles.headerTitle}>
+          {name}
+          {/* Временный индикатор для отладки: 💾 кэш / 🌐 сеть */}
+          {loadSource && (
+            <span
+              className={styles.sourceTag}
+              title={loadSource === 'cache' ? 'Из кэша' : 'Из сети'}
+            >
+              {loadSource === 'cache' ? ' 💾' : ' 🌐'}
+            </span>
+          )}
+        </h1>
         <button
           className={styles.headerBtn}
           onClick={() => void downloadPdf(url, name)}
