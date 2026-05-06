@@ -68,6 +68,41 @@ async function downloadPdf(url: string, name: string): Promise<void> {
 }
 
 const PADDING = 16;
+const PDF_CACHE_NAME = 'pdf-manual-v1';
+
+// Кэшируем PDF вручную через Cache API — не зависим от SW-перехвата.
+// На iOS fetch из Web Worker не проходит через SW, поэтому Workbox
+// runtimeCaching не работает. Cache API доступен в главном потоке напрямую.
+async function fetchPdfWithCache(url: string): Promise<ArrayBuffer> {
+  // 1. Проверяем кэш
+  if ('caches' in window) {
+    try {
+      const cache = await caches.open(PDF_CACHE_NAME);
+      const cached = await cache.match(url);
+      if (cached) {
+        return cached.arrayBuffer();
+      }
+    } catch {
+      // Cache API недоступен — идём в сеть
+    }
+  }
+
+  // 2. Загружаем из сети
+  const response = await fetch(url);
+  if (!response.ok) throw new Error(`HTTP ${response.status}`);
+
+  // 3. Кладём в кэш (clone — response можно прочитать только один раз)
+  if ('caches' in window) {
+    try {
+      const cache = await caches.open(PDF_CACHE_NAME);
+      await cache.put(url, response.clone());
+    } catch {
+      // Не удалось закэшировать — не критично, просто продолжаем
+    }
+  }
+
+  return response.arrayBuffer();
+}
 
 export default function PdfViewer() {
   const [searchParams] = useSearchParams();
@@ -80,17 +115,12 @@ export default function PdfViewer() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(false);
   const [displayScale, setDisplayScale] = useState(1);
-
-  // PDF загружается в главном потоке через fetch — SW перехватывает запрос
-  // и кэширует ответ. На iOS fetch из Web Worker (PDF.js) не проходит через SW,
-  // поэтому передаём PDF.js уже готовый ArrayBuffer вместо URL.
   const [pdfData, setPdfData] = useState<{ data: ArrayBuffer } | null>(null);
 
   const containerRef = useRef<HTMLDivElement>(null);
   const transformRef = useRef<ReactZoomPanPinchRef>(null);
   const [containerWidth, setContainerWidth] = useState(320);
 
-  // Загружаем PDF в главном потоке при монтировании / смене URL
   useEffect(() => {
     if (!url) return;
     setIsLoading(true);
@@ -98,15 +128,8 @@ export default function PdfViewer() {
     setPdfData(null);
     setNumPages(0);
 
-    fetch(url)
-      .then((res) => {
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        return res.arrayBuffer();
-      })
-      .then((buffer) => {
-        setPdfData({ data: buffer });
-        // isLoading сбросится в onDocumentLoadSuccess после парсинга PDF.js
-      })
+    fetchPdfWithCache(url)
+      .then((buffer) => setPdfData({ data: buffer }))
       .catch(() => {
         setIsLoading(false);
         setError(true);
