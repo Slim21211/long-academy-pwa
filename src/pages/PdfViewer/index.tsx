@@ -81,9 +81,37 @@ export default function PdfViewer() {
   const [error, setError] = useState(false);
   const [displayScale, setDisplayScale] = useState(1);
 
+  // PDF загружается в главном потоке через fetch — SW перехватывает запрос
+  // и кэширует ответ. На iOS fetch из Web Worker (PDF.js) не проходит через SW,
+  // поэтому передаём PDF.js уже готовый ArrayBuffer вместо URL.
+  const [pdfData, setPdfData] = useState<{ data: ArrayBuffer } | null>(null);
+
   const containerRef = useRef<HTMLDivElement>(null);
   const transformRef = useRef<ReactZoomPanPinchRef>(null);
   const [containerWidth, setContainerWidth] = useState(320);
+
+  // Загружаем PDF в главном потоке при монтировании / смене URL
+  useEffect(() => {
+    if (!url) return;
+    setIsLoading(true);
+    setError(false);
+    setPdfData(null);
+    setNumPages(0);
+
+    fetch(url)
+      .then((res) => {
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        return res.arrayBuffer();
+      })
+      .then((buffer) => {
+        setPdfData({ data: buffer });
+        // isLoading сбросится в onDocumentLoadSuccess после парсинга PDF.js
+      })
+      .catch(() => {
+        setIsLoading(false);
+        setError(true);
+      });
+  }, [url]);
 
   useEffect(() => {
     const update = () => {
@@ -110,8 +138,6 @@ export default function PdfViewer() {
     setError(true);
   }, []);
 
-  // PDF рендерится один раз при базовой ширине контейнера.
-  // Зум — CSS transform через TransformWrapper, без перерисовки канваса.
   const pageWidth = Math.max(containerWidth - PADDING * 2, 100);
 
   if (!url) {
@@ -178,14 +204,9 @@ export default function PdfViewer() {
               minWidth: `${containerWidth}px`,
             }}
           >
-            {!error && (
+            {!error && pdfData && (
               <Document
-                file={url}
-                options={{
-                  disableRange: true,
-                  disableStream: true,
-                  disableAutoFetch: true,
-                }}
+                file={pdfData}
                 onLoadSuccess={onDocumentLoadSuccess}
                 onLoadError={onDocumentLoadError}
                 loading={null}
