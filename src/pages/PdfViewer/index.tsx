@@ -1,6 +1,8 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { Document, Page, pdfjs } from 'react-pdf';
+import { TransformWrapper, TransformComponent } from 'react-zoom-pan-pinch';
+import type { ReactZoomPanPinchRef } from 'react-zoom-pan-pinch';
 import 'react-pdf/dist/Page/TextLayer.css';
 import 'react-pdf/dist/Page/AnnotationLayer.css';
 import styles from './PdfViewer.module.scss';
@@ -27,7 +29,6 @@ function ArrowLeft() {
     </svg>
   );
 }
-
 function DownloadIcon() {
   return (
     <svg
@@ -51,7 +52,7 @@ function DownloadIcon() {
 async function downloadPdf(url: string, name: string): Promise<void> {
   try {
     const res = await fetch(url);
-    if (!res.ok) throw new Error('fetch failed');
+    if (!res.ok) throw new Error();
     const blob = await res.blob();
     const blobUrl = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -66,18 +67,7 @@ async function downloadPdf(url: string, name: string): Promise<void> {
   }
 }
 
-const SCALE_MIN = 0.5;
-const SCALE_MAX = 3.0;
-const SCALE_STEP = 0.25;
-const SCALE_DEFAULT = 1.0;
 const PADDING = 16;
-
-// ─── Pinch distance helper ────────────────────────────────────────────────────
-function getTouchDistance(touches: TouchList): number {
-  const dx = touches[0].clientX - touches[1].clientX;
-  const dy = touches[0].clientY - touches[1].clientY;
-  return Math.sqrt(dx * dx + dy * dy);
-}
 
 export default function PdfViewer() {
   const [searchParams] = useSearchParams();
@@ -86,23 +76,15 @@ export default function PdfViewer() {
   const url = searchParams.get('url') ?? '';
   const name = searchParams.get('name') ?? 'Документ';
 
-  const [numPages, setNumPages] = useState<number>(0);
-  const [scale, setScale] = useState(SCALE_DEFAULT);
+  const [numPages, setNumPages] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(false);
+  const [displayScale, setDisplayScale] = useState(1);
 
   const containerRef = useRef<HTMLDivElement>(null);
+  const transformRef = useRef<ReactZoomPanPinchRef>(null);
   const [containerWidth, setContainerWidth] = useState(320);
 
-  // Реф для актуального scale внутри event listener (closure фиксирует значение на момент создания)
-  const scaleRef = useRef(scale);
-  const pinchRef = useRef({ active: false, startDist: 0, startScale: 1 });
-
-  useEffect(() => {
-    scaleRef.current = scale;
-  }, [scale]);
-
-  // Измеряем ширину контейнера
   useEffect(() => {
     const update = () => {
       if (containerRef.current)
@@ -112,59 +94,6 @@ export default function PdfViewer() {
     const ro = new ResizeObserver(update);
     if (containerRef.current) ro.observe(containerRef.current);
     return () => ro.disconnect();
-  }, []);
-
-  // ── Pinch-to-zoom ────────────────────────────────────────────────────────────
-  // Нативные слушатели с passive: false — единственный способ вызвать
-  // e.preventDefault() и заблокировать браузерный зум жестом.
-  // React-обработчики не подходят: они регистрируются как passive по умолчанию.
-  useEffect(() => {
-    const el = containerRef.current;
-    if (!el) return;
-
-    const onTouchStart = (e: TouchEvent) => {
-      if (e.touches.length === 2) {
-        pinchRef.current = {
-          active: true,
-          startDist: getTouchDistance(e.touches),
-          startScale: scaleRef.current,
-        };
-      } else {
-        pinchRef.current.active = false;
-      }
-    };
-
-    const onTouchMove = (e: TouchEvent) => {
-      const pinch = pinchRef.current;
-      if (e.touches.length !== 2 || !pinch.active) return;
-
-      // Блокируем браузерный зум только при pinch-жесте
-      e.preventDefault();
-
-      const dist = getTouchDistance(e.touches);
-      const ratio = dist / pinch.startDist;
-      const newScale = Math.min(
-        SCALE_MAX,
-        Math.max(SCALE_MIN, pinch.startScale * ratio)
-      );
-
-      setScale(+newScale.toFixed(2));
-    };
-
-    const onTouchEnd = (e: TouchEvent) => {
-      // Если один палец остался — продолжаем как обычный скролл
-      if (e.touches.length < 2) pinchRef.current.active = false;
-    };
-
-    el.addEventListener('touchstart', onTouchStart, { passive: true });
-    el.addEventListener('touchmove', onTouchMove, { passive: false }); // passive: false обязателен
-    el.addEventListener('touchend', onTouchEnd, { passive: true });
-
-    return () => {
-      el.removeEventListener('touchstart', onTouchStart);
-      el.removeEventListener('touchmove', onTouchMove);
-      el.removeEventListener('touchend', onTouchEnd);
-    };
   }, []);
 
   const onDocumentLoadSuccess = useCallback(
@@ -181,14 +110,9 @@ export default function PdfViewer() {
     setError(true);
   }, []);
 
-  const zoomIn = () =>
-    setScale((s) => Math.min(SCALE_MAX, +(s + SCALE_STEP).toFixed(2)));
-  const zoomOut = () =>
-    setScale((s) => Math.max(SCALE_MIN, +(s - SCALE_STEP).toFixed(2)));
-  const resetZoom = () => setScale(SCALE_DEFAULT);
-
-  const baseWidth = Math.max(containerWidth - PADDING * 2, 100);
-  const pageWidth = Math.round(baseWidth * scale);
+  // PDF рендерится один раз при базовой ширине контейнера.
+  // Зум — CSS transform через TransformWrapper, без перерисовки канваса.
+  const pageWidth = Math.max(containerWidth - PADDING * 2, 100);
 
   if (!url) {
     return (
@@ -222,58 +146,88 @@ export default function PdfViewer() {
         </button>
       </header>
 
-      {/* ── Scroll + pinch container ── */}
+      {/* ── Zoom + pan + scroll ── */}
       <div className={styles.canvasWrap} ref={containerRef}>
-        <div className={styles.canvasInner}>
-          {isLoading && (
-            <div className={styles.loader}>
-              <div className={styles.spinner} />
-              <p>Загрузка документа…</p>
-            </div>
-          )}
-
-          {error && (
-            <div className={styles.errorBox}>
-              <p className={styles.errorIcon}>⚠️</p>
-              <p className={styles.errorText}>Не удалось загрузить документ</p>
-              <button
-                onClick={() => {
-                  setError(false);
-                  setIsLoading(true);
-                }}
-                className={styles.retryBtn}
+        <TransformWrapper
+          ref={transformRef}
+          initialScale={1}
+          minScale={0.3}
+          maxScale={5}
+          // Плавная инерция после жеста
+          velocityAnimation={{ sensitivityTouch: 1, animationTime: 400 }}
+          // Двойной тап — сброс зума
+          doubleClick={{ mode: 'reset' }}
+          // Колёсико мыши на десктопе
+          wheel={{ step: 0.08 }}
+          // Pinch чувствительность
+          pinch={{ step: 5 }}
+          // Не ограничиваем границами — пользователь может листать документ
+          limitToBounds={false}
+          // Обновляем отображаемый процент в нижней панели
+          onTransform={(ref) => setDisplayScale(ref.state.scale)}
+        >
+          <TransformComponent
+            wrapperStyle={{ width: '100%', height: '100%' }}
+            contentStyle={{
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              padding: `${PADDING}px`,
+              gap: '0',
+              // Минимальная ширина = вьюпорт, чтобы узкий контент был по центру
+              minWidth: `${containerWidth}px`,
+            }}
+          >
+            {!error && (
+              <Document
+                file={url}
+                onLoadSuccess={onDocumentLoadSuccess}
+                onLoadError={onDocumentLoadError}
+                loading={null}
               >
-                Повторить
-              </button>
-            </div>
-          )}
+                {Array.from({ length: numPages }, (_, i) => (
+                  <div
+                    key={i}
+                    className={styles.pageWrap}
+                    style={{ width: pageWidth }}
+                  >
+                    <Page
+                      pageNumber={i + 1}
+                      width={pageWidth}
+                      renderTextLayer={true}
+                      renderAnnotationLayer={false}
+                      loading={null}
+                    />
+                    {i < numPages - 1 && <div className={styles.pageDivider} />}
+                  </div>
+                ))}
+              </Document>
+            )}
+          </TransformComponent>
+        </TransformWrapper>
 
-          {!error && (
-            <Document
-              file={url}
-              onLoadSuccess={onDocumentLoadSuccess}
-              onLoadError={onDocumentLoadError}
-              loading={null}
+        {/* Loader и error — поверх TransformWrapper */}
+        {isLoading && (
+          <div className={styles.overlay}>
+            <div className={styles.spinner} />
+            <p>Загрузка документа…</p>
+          </div>
+        )}
+        {error && (
+          <div className={styles.overlay}>
+            <p className={styles.errorIcon}>⚠️</p>
+            <p className={styles.errorText}>Не удалось загрузить документ</p>
+            <button
+              onClick={() => {
+                setError(false);
+                setIsLoading(true);
+              }}
+              className={styles.retryBtn}
             >
-              {Array.from({ length: numPages }, (_, i) => (
-                <div
-                  key={i}
-                  className={styles.pageWrap}
-                  style={{ width: pageWidth }}
-                >
-                  <Page
-                    pageNumber={i + 1}
-                    width={pageWidth}
-                    renderTextLayer={true}
-                    renderAnnotationLayer={false}
-                    loading={null}
-                  />
-                  {i < numPages - 1 && <div className={styles.pageDivider} />}
-                </div>
-              ))}
-            </Document>
-          )}
-        </div>
+              Повторить
+            </button>
+          </div>
+        )}
       </div>
 
       {/* ── Zoom bar ── */}
@@ -281,24 +235,22 @@ export default function PdfViewer() {
         <nav className={styles.bottomBar} aria-label="Масштаб">
           <button
             className={styles.navBtn}
-            onClick={zoomOut}
-            disabled={scale <= SCALE_MIN}
+            onClick={() => transformRef.current?.zoomOut(0.25)}
             aria-label="Уменьшить"
           >
             −
           </button>
           <button
             className={styles.zoomLabel}
-            onClick={resetZoom}
-            title="Сбросить масштаб"
+            onClick={() => transformRef.current?.resetTransform()}
             aria-label="Сбросить масштаб"
+            title="Сбросить"
           >
-            {Math.round(scale * 100)}%
+            {Math.round(displayScale * 100)}%
           </button>
           <button
             className={styles.navBtn}
-            onClick={zoomIn}
-            disabled={scale >= SCALE_MAX}
+            onClick={() => transformRef.current?.zoomIn(0.25)}
             aria-label="Увеличить"
           >
             +

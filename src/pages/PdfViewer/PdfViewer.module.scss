@@ -3,7 +3,6 @@
 $bottom-bar-height: 56px;
 $header-height-viewer: 56px;
 
-// ─── Page shell ───────────────────────────────────────────────────────────────
 .page {
   display: flex;
   flex-direction: column;
@@ -41,7 +40,6 @@ $header-height-viewer: 56px;
   transition:
     background $transition-fast,
     transform $transition-fast;
-
   &:hover {
     background: color-mix(in srgb, #ebf5ee 88%, #2d7a50 12%);
   }
@@ -57,50 +55,23 @@ $header-height-viewer: 56px;
   color: $color-text;
   text-align: center;
   @include truncate;
-
   @include desktop {
     font-size: $font-size-base;
   }
 }
 
-// ─── Scroll container ─────────────────────────────────────────────────────────
+// ─── Canvas wrap ──────────────────────────────────────────────────────────────
+// TransformWrapper занимает всё пространство и сам управляет touch-событиями
 .canvasWrap {
   flex: 1;
-  overflow: auto; // вертикальный + горизонтальный скролл
-
-  @include mobile {
-    scrollbar-width: none;
-    &::-webkit-scrollbar {
-      display: none;
-    }
-  }
+  overflow: hidden; // TransformWrapper рулит скроллом сам
+  position: relative;
+  // Убираем браузерный зум — TransformWrapper обрабатывает pinch сам
+  touch-action: none;
 }
 
-// Ключевой слой для корректного зума и центрирования:
-//
-// min-width: 100% → гарантирует что при узких страницах (scale ≤ 1)
-//   canvasInner заполняет весь вьюпорт и align-items: center работает.
-//
-// width: max-content → при широких страницах (scale > 1) canvasInner
-//   расширяется под контент. canvasWrap получает горизонтальный скролл.
-//   Поскольку canvasInner прижат к левому краю canvasWrap (не centered),
-//   левый край всегда доступен при scrollLeft = 0. Это фикс бага,
-//   при котором align-items: center на flex-контейнере давало симметричное
-//   переполнение и левая часть оказывалась недоступна (scrollLeft ≥ 0).
-.canvasInner {
-  min-width: 100%;
-  width: max-content;
-  display: flex;
-  flex-direction: column;
-  align-items: center; // центрирует pageWrap когда страница уже вьюпорта
-  padding: $space-4;
-  gap: 0; // зазоры делаем через pageDivider, не gap
-}
-
-// ─── Page block ───────────────────────────────────────────────────────────────
+// ─── PDF страницы ─────────────────────────────────────────────────────────────
 .pageWrap {
-  // margin: 0 auto — запасное центрирование на случай если align-items выше
-  // не сработает из-за обёртки react-pdf__Document
   margin: 0 auto;
   flex-shrink: 0;
   box-shadow: 0 2px 12px rgba(0, 0, 0, 0.45);
@@ -117,8 +88,6 @@ $header-height-viewer: 56px;
   }
 }
 
-// Тонкий тёмный разделитель между страницами —
-// визуально отделяет страницы без большого белого провала
 .pageDivider {
   width: 100%;
   height: 6px;
@@ -126,15 +95,19 @@ $header-height-viewer: 56px;
   flex-shrink: 0;
 }
 
-// ─── States ───────────────────────────────────────────────────────────────────
-.loader {
+// ─── Overlay (loading / error) ────────────────────────────────────────────────
+.overlay {
+  position: absolute;
+  inset: 0;
   display: flex;
   flex-direction: column;
   align-items: center;
+  justify-content: center;
   gap: $space-4;
-  padding: $space-16 $space-4;
-  color: rgba(255, 255, 255, 0.7);
+  background: #525659;
+  color: rgba(255, 255, 255, 0.75);
   font-size: $font-size-sm;
+  z-index: 10;
 }
 
 .spinner {
@@ -149,15 +122,6 @@ $header-height-viewer: 56px;
       transform: rotate(360deg);
     }
   }
-}
-
-.errorBox {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: $space-3;
-  padding: $space-16 $space-4;
-  text-align: center;
 }
 
 .errorIcon {
@@ -231,18 +195,12 @@ $header-height-viewer: 56px;
   cursor: pointer;
   transition:
     background $transition-fast,
-    opacity $transition-fast,
     transform $transition-fast;
-
-  &:disabled {
-    opacity: 0.3;
-    cursor: default;
-  }
-  &:not(:disabled):hover {
+  &:hover {
     background: $color-primary-bg;
     color: $color-primary;
   }
-  &:not(:disabled):active {
+  &:active {
     transform: scale(0.9);
   }
 }
