@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import Header from '../../components/Header';
 import { VIDEO, PDF } from '../../data/links';
 import styles from './About.module.scss';
@@ -50,10 +51,50 @@ function OpenIcon() {
   );
 }
 
+function DownloadIcon() {
+  return (
+    <svg
+      width="16"
+      height="16"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2.2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+      <polyline points="7 10 12 15 17 10" />
+      <line x1="12" y1="15" x2="12" y2="3" />
+    </svg>
+  );
+}
+
+async function downloadPdf(url: string, name: string): Promise<void> {
+  try {
+    const res = await fetch(url);
+    if (!res.ok) throw new Error();
+    const blob = await res.blob();
+    const blobUrl = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = blobUrl;
+    a.download = `${name}.pdf`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(blobUrl), 2000);
+  } catch {
+    window.open(url, '_blank');
+  }
+}
+
+const MISSION_NAME = 'Миссия и ценности Компании';
+
 export default function About() {
   const [videoVisible, setVideoVisible] = useState(false);
   const [videoError, setVideoError] = useState(false);
   const [videoKey, setVideoKey] = useState(0);
+  const navigate = useNavigate();
 
   const handleShowVideo = () => {
     setVideoVisible(true);
@@ -65,6 +106,17 @@ export default function About() {
     setVideoKey((k) => k + 1);
   };
 
+  const handleOpenMission = () => {
+    const params = new URLSearchParams({
+      url: PDF.MISSION,
+      name: MISSION_NAME,
+    });
+    navigate(`/viewer?${params.toString()}`);
+  };
+
+  const handleDownloadMission = () =>
+    void downloadPdf(PDF.MISSION, MISSION_NAME);
+
   return (
     <div className={`${styles.page} page-enter`}>
       <Header title="О Компании" showBack backPath="/" />
@@ -74,15 +126,15 @@ export default function About() {
           Посмотрите медиаматериалы, чтобы больше узнать о нашей компании
         </p>
 
+        {/* Video */}
         <section className={styles.section}>
           <h2 className={styles.sectionTitle}>Видео о компании</h2>
-
           <div className={styles.videoCard}>
             {!videoVisible ? (
               <button
                 className={styles.videoPreview}
                 onClick={handleShowVideo}
-                aria-label="Воспроизвести видео о компании"
+                aria-label="Воспроизвести видео"
               >
                 <div className={styles.videoThumb}>
                   <div className={styles.playBtn}>
@@ -94,9 +146,9 @@ export default function About() {
             ) : !videoError ? (
               <video
                 key={videoKey}
-                autoPlay
                 controls
                 playsInline
+                autoPlay
                 preload="metadata"
                 className={styles.video}
                 onError={() => setVideoError(true)}
@@ -122,25 +174,36 @@ export default function About() {
           </div>
         </section>
 
+        {/* Mission PDF — те же две кнопки что на карточках документов */}
         <section className={styles.section}>
           <h2 className={styles.sectionTitle}>Документы</h2>
-          <a
-            href={PDF.MISSION}
-            target="_blank"
-            rel="noopener noreferrer"
-            className={styles.docCard}
-          >
+          <div className={styles.docCard}>
             <div className={styles.docIcon}>
               <DocumentIcon />
             </div>
             <div className={styles.docContent}>
-              <p className={styles.docName}>Миссия и ценности Компании</p>
+              <p className={styles.docName}>{MISSION_NAME}</p>
               <p className={styles.docHint}>PDF документ</p>
             </div>
-            <div className={styles.docArrow}>
-              <OpenIcon />
+            <div className={styles.docActions}>
+              <button
+                onClick={handleOpenMission}
+                className={`${styles.btn} ${styles.btnPrimary}`}
+                aria-label="Открыть документ"
+              >
+                <OpenIcon />
+                <span>Открыть</span>
+              </button>
+              <button
+                onClick={handleDownloadMission}
+                className={`${styles.btn} ${styles.btnSecondary}`}
+                aria-label="Скачать документ"
+              >
+                <DownloadIcon />
+                <span>Скачать</span>
+              </button>
             </div>
-          </a>
+          </div>
         </section>
       </main>
     </div>

@@ -2,13 +2,13 @@ import { useState, lazy, Suspense } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import Layout from './components/Layout';
 import InstallBanner from './components/InstallBanner';
+import UpdateNotification from './components/UpdateNotification';
 import Home from './pages/Home';
 import About from './pages/About';
 import Standards from './pages/Standards';
 import Category from './pages/Category';
 import Friends from './pages/Friends';
 
-// Загружаем PdfViewer только по требованию — react-pdf весит ~470KB
 const PdfViewer = lazy(() => import('./pages/PdfViewer'));
 
 export default function App() {
@@ -48,6 +48,7 @@ export default function App() {
       </Routes>
 
       <InstallBanner onVisibilityChange={setBannerVisible} />
+      <UpdateNotification />
     </Layout>
   );
 }
