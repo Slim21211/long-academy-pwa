@@ -70,7 +70,14 @@ const SCALE_MIN = 0.5;
 const SCALE_MAX = 3.0;
 const SCALE_STEP = 0.25;
 const SCALE_DEFAULT = 1.0;
-const PADDING = 16; // px, с каждой стороны
+const PADDING = 16;
+
+// ─── Pinch distance helper ────────────────────────────────────────────────────
+function getTouchDistance(touches: TouchList): number {
+  const dx = touches[0].clientX - touches[1].clientX;
+  const dy = touches[0].clientY - touches[1].clientY;
+  return Math.sqrt(dx * dx + dy * dy);
+}
 
 export default function PdfViewer() {
   const [searchParams] = useSearchParams();
@@ -87,6 +94,15 @@ export default function PdfViewer() {
   const containerRef = useRef<HTMLDivElement>(null);
   const [containerWidth, setContainerWidth] = useState(320);
 
+  // Реф для актуального scale внутри event listener (closure фиксирует значение на момент создания)
+  const scaleRef = useRef(scale);
+  const pinchRef = useRef({ active: false, startDist: 0, startScale: 1 });
+
+  useEffect(() => {
+    scaleRef.current = scale;
+  }, [scale]);
+
+  // Измеряем ширину контейнера
   useEffect(() => {
     const update = () => {
       if (containerRef.current)
@@ -96,6 +112,59 @@ export default function PdfViewer() {
     const ro = new ResizeObserver(update);
     if (containerRef.current) ro.observe(containerRef.current);
     return () => ro.disconnect();
+  }, []);
+
+  // ── Pinch-to-zoom ────────────────────────────────────────────────────────────
+  // Нативные слушатели с passive: false — единственный способ вызвать
+  // e.preventDefault() и заблокировать браузерный зум жестом.
+  // React-обработчики не подходят: они регистрируются как passive по умолчанию.
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+
+    const onTouchStart = (e: TouchEvent) => {
+      if (e.touches.length === 2) {
+        pinchRef.current = {
+          active: true,
+          startDist: getTouchDistance(e.touches),
+          startScale: scaleRef.current,
+        };
+      } else {
+        pinchRef.current.active = false;
+      }
+    };
+
+    const onTouchMove = (e: TouchEvent) => {
+      const pinch = pinchRef.current;
+      if (e.touches.length !== 2 || !pinch.active) return;
+
+      // Блокируем браузерный зум только при pinch-жесте
+      e.preventDefault();
+
+      const dist = getTouchDistance(e.touches);
+      const ratio = dist / pinch.startDist;
+      const newScale = Math.min(
+        SCALE_MAX,
+        Math.max(SCALE_MIN, pinch.startScale * ratio)
+      );
+
+      setScale(+newScale.toFixed(2));
+    };
+
+    const onTouchEnd = (e: TouchEvent) => {
+      // Если один палец остался — продолжаем как обычный скролл
+      if (e.touches.length < 2) pinchRef.current.active = false;
+    };
+
+    el.addEventListener('touchstart', onTouchStart, { passive: true });
+    el.addEventListener('touchmove', onTouchMove, { passive: false }); // passive: false обязателен
+    el.addEventListener('touchend', onTouchEnd, { passive: true });
+
+    return () => {
+      el.removeEventListener('touchstart', onTouchStart);
+      el.removeEventListener('touchmove', onTouchMove);
+      el.removeEventListener('touchend', onTouchEnd);
+    };
   }, []);
 
   const onDocumentLoadSuccess = useCallback(
@@ -118,8 +187,6 @@ export default function PdfViewer() {
     setScale((s) => Math.max(SCALE_MIN, +(s - SCALE_STEP).toFixed(2)));
   const resetZoom = () => setScale(SCALE_DEFAULT);
 
-  // Базовая ширина = контейнер минус паддинги.
-  // pageWidth — то, что получит <Page width={...} />.
   const baseWidth = Math.max(containerWidth - PADDING * 2, 100);
   const pageWidth = Math.round(baseWidth * scale);
 
@@ -155,16 +222,8 @@ export default function PdfViewer() {
         </button>
       </header>
 
-      {/* ── Scroll container ── */}
+      {/* ── Scroll + pinch container ── */}
       <div className={styles.canvasWrap} ref={containerRef}>
-        {/*
-          canvasInner — ключевой слой для корректного зума:
-          - min-width: 100%  → при узких страницах заполняет вьюпорт,
-                               align-items: center центрирует их
-          - width: max-content → при широких страницах расширяется под контент,
-                               canvasWrap получает горизонтальный скролл,
-                               левый край всегда доступен (нет negative overflow)
-        */}
         <div className={styles.canvasInner}>
           {isLoading && (
             <div className={styles.loader}>
@@ -209,7 +268,6 @@ export default function PdfViewer() {
                     renderAnnotationLayer={false}
                     loading={null}
                   />
-                  {/* Тонкий разделитель между страницами вместо белого провала */}
                   {i < numPages - 1 && <div className={styles.pageDivider} />}
                 </div>
               ))}
