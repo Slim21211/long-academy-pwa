@@ -1,3 +1,4 @@
+import { useNavigate } from 'react-router-dom';
 import styles from './DocCard.module.scss';
 
 interface DocCardProps {
@@ -65,13 +66,6 @@ function DownloadIcon() {
   );
 }
 
-// Google Docs Viewer обходит Content-Disposition: attachment от GitHub —
-// открывает PDF встроенным просмотрщиком на всех устройствах включая iOS mobile
-function getViewerUrl(pdfUrl: string): string {
-  return `https://docs.google.com/viewer?url=${encodeURIComponent(pdfUrl)}`;
-}
-
-// fetch + blob → программный клик с download атрибутом (без диалогов)
 async function downloadPdf(url: string, name: string): Promise<void> {
   try {
     const res = await fetch(url);
@@ -91,6 +85,13 @@ async function downloadPdf(url: string, name: string): Promise<void> {
 }
 
 export default function DocCard({ name, url, index }: DocCardProps) {
+  const navigate = useNavigate();
+
+  const handleOpen = () => {
+    const params = new URLSearchParams({ url, name });
+    navigate(`/viewer?${params.toString()}`);
+  };
+
   const handleDownload = () => void downloadPdf(url, name);
 
   return (
@@ -105,16 +106,14 @@ export default function DocCard({ name, url, index }: DocCardProps) {
       <p className={styles.name}>{name}</p>
 
       <div className={styles.actions}>
-        <a
-          href={getViewerUrl(url)}
-          target="_blank"
-          rel="noopener noreferrer"
+        <button
+          onClick={handleOpen}
           className={`${styles.btn} ${styles.btnPrimary}`}
           aria-label={`Открыть ${name}`}
         >
           <OpenIcon />
           <span>Открыть</span>
-        </a>
+        </button>
 
         <button
           onClick={handleDownload}
