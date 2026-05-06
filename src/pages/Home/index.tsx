@@ -34,8 +34,17 @@ const MENU_ITEMS = [
 
 function ChevronRight() {
   return (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M9 18l6-6-6-6"/>
+    <svg
+      width="18"
+      height="18"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M9 18l6-6-6-6" />
     </svg>
   );
 }
@@ -50,7 +59,8 @@ export default function Home() {
       <main className={styles.main}>
         <section className={styles.hero}>
           <p className={styles.heroText}>
-            Добро пожаловать в корпоративную базу знаний. Здесь вы найдёте все документы и материалы, необходимые для работы.
+            Добро пожаловать в корпоративную базу знаний. Здесь вы найдёте все
+            документы и материалы, необходимые для работы.
           </p>
         </section>
 
@@ -62,8 +72,13 @@ export default function Home() {
               onClick={() => navigate(item.path)}
               style={{ animationDelay: `${i * 80}ms` }}
             >
-              <div className={styles.cardIcon} style={{ background: item.bg, color: item.accent }}>
-                <span role="img" aria-hidden="true">{item.icon}</span>
+              <div
+                className={styles.cardIcon}
+                style={{ background: item.bg, color: item.accent }}
+              >
+                <span role="img" aria-hidden="true">
+                  {item.icon}
+                </span>
               </div>
               <div className={styles.cardContent}>
                 <span className={styles.cardTitle}>{item.title}</span>
@@ -75,6 +90,10 @@ export default function Home() {
             </button>
           ))}
         </nav>
+
+        <button className={styles.debugLink} onClick={() => navigate('/debug')}>
+          🔧 Диагностика
+        </button>
       </main>
     </div>
   );

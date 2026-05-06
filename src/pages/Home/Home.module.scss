@@ -54,7 +54,10 @@
   cursor: pointer;
   font-family: inherit;
   animation: fadeSlideIn $transition-slow both;
-  transition: transform $transition-normal, box-shadow $transition-normal, border-color $transition-fast;
+  transition:
+    transform $transition-normal,
+    box-shadow $transition-normal,
+    border-color $transition-fast;
 
   &:hover {
     transform: translateY(-2px);
@@ -116,7 +119,19 @@
   line-height: 1.3;
 }
 
-.cardArrow {
-  flex-shrink: 0;
-  opacity: 0.6;
+.debugLink {
+  display: block;
+  margin: $space-6 auto 0;
+  font-size: $font-size-xs;
+  color: $color-text-muted;
+  font-family: inherit;
+  cursor: pointer;
+  background: none;
+  padding: $space-2 $space-4;
+  border-radius: $radius-full;
+  border: 1px solid $color-border-light;
+
+  &:hover {
+    color: $color-text-secondary;
+  }
 }
