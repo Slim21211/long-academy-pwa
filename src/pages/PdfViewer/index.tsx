@@ -67,64 +67,88 @@ async function downloadPdf(url: string, name: string): Promise<void> {
   }
 }
 
-const PADDING = 16;
-const PDF_CACHE_NAME = 'pdf-manual-v1';
+// ─── IndexedDB кэш ────────────────────────────────────────────────────────────
+// Используем IndexedDB вместо Cache API: он не знает об HTTP-заголовках
+// (Vary, Cache-Control и т.д.) и работает одинаково на всех платформах iOS.
+// Cache API + Vary: Accept-Encoding от GitHub = cache.match возвращает null
+// даже когда файл физически есть — это известный баг/ограничение WebKit.
+const IDB_NAME = 'pdf-store';
+const IDB_STORE = 'pdfs';
+const IDB_VERSION = 1;
 
-type LoadSource = 'network' | 'cache';
+function openIDB(): Promise<IDBDatabase> {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open(IDB_NAME, IDB_VERSION);
+    req.onupgradeneeded = () => {
+      req.result.createObjectStore(IDB_STORE);
+    };
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
 
-async function fetchPdfWithCache(
-  url: string
-): Promise<{ buffer: ArrayBuffer; source: LoadSource }> {
-  // ── 1. Читаем из кэша ──────────────────────────────────────────────────────
-  if ('caches' in window) {
-    // Проверяем оба кэша: наш ручной + старый Workbox (pdf-cache)
-    for (const cacheName of [PDF_CACHE_NAME, 'pdf-cache']) {
-      try {
-        const cache = await caches.open(cacheName);
-        // ignoreVary: true — ОБЯЗАТЕЛЬНО.
-        // GitHub отдаёт Vary: Accept-Encoding. Без этого флага cache.match
-        // сравнивает заголовки запроса с сохранёнными — они чуть отличаются
-        // → возвращает null даже когда файл физически есть в кэше.
-        const cached = await cache.match(url, { ignoreVary: true });
-        if (cached) {
-          const buffer = await cached.arrayBuffer();
-          return { buffer, source: 'cache' };
-        }
-      } catch {
-        // этот кэш не сработал — пробуем следующий
-      }
-    }
+async function idbGet(url: string): Promise<ArrayBuffer | null> {
+  try {
+    const db = await openIDB();
+    return await new Promise((resolve, reject) => {
+      const req = db.transaction(IDB_STORE).objectStore(IDB_STORE).get(url);
+      req.onsuccess = () =>
+        resolve((req.result as ArrayBuffer | undefined) ?? null);
+      req.onerror = () => reject(req.error);
+    });
+  } catch {
+    return null;
   }
+}
 
-  // ── 2. Загружаем из сети ───────────────────────────────────────────────────
-  const response = await fetch(url, { mode: 'cors', credentials: 'omit' });
+async function idbPut(url: string, buffer: ArrayBuffer): Promise<void> {
+  try {
+    const db = await openIDB();
+    await new Promise<void>((resolve, reject) => {
+      const req = db
+        .transaction(IDB_STORE, 'readwrite')
+        .objectStore(IDB_STORE)
+        .put(buffer, url);
+      req.onsuccess = () => resolve();
+      req.onerror = () => reject(req.error);
+    });
+  } catch {
+    /* не критично */
+  }
+}
+
+export async function idbKeys(): Promise<string[]> {
+  try {
+    const db = await openIDB();
+    return await new Promise((resolve, reject) => {
+      const req = db.transaction(IDB_STORE).objectStore(IDB_STORE).getAllKeys();
+      req.onsuccess = () => resolve(req.result as string[]);
+      req.onerror = () => reject(req.error);
+    });
+  } catch {
+    return [];
+  }
+}
+
+// ─── Fetch с кэшированием ─────────────────────────────────────────────────────
+async function fetchPdfWithCache(url: string): Promise<ArrayBuffer> {
+  // 1. Проверяем IndexedDB
+  const cached = await idbGet(url);
+  if (cached) return cached;
+
+  // 2. Загружаем из сети
+  const response = await fetch(url);
   if (!response.ok) throw new Error(`HTTP ${response.status}`);
-
-  // Читаем тело ПОЛНОСТЬЮ в ArrayBuffer
   const buffer = await response.arrayBuffer();
 
-  // ── 3. Кладём в кэш ───────────────────────────────────────────────────────
-  // Создаём новый Response из уже прочитанного buffer — так мы точно не
-  // пытаемся читать поток дважды (в отличие от response.clone())
-  if ('caches' in window) {
-    try {
-      const cache = await caches.open(PDF_CACHE_NAME);
-      await cache.put(
-        url,
-        new Response(buffer.slice(0), {
-          headers: {
-            'Content-Type': 'application/pdf',
-            'Content-Length': String(buffer.byteLength),
-          },
-        })
-      );
-    } catch {
-      // Не критично
-    }
-  }
+  // 3. Сохраняем в IndexedDB (не ждём — не блокируем рендер)
+  void idbPut(url, buffer.slice(0));
 
-  return { buffer, source: 'network' };
+  return buffer;
 }
+
+// ─── Constants ────────────────────────────────────────────────────────────────
+const PADDING = 16;
 
 export default function PdfViewer() {
   const [searchParams] = useSearchParams();
@@ -138,7 +162,8 @@ export default function PdfViewer() {
   const [error, setError] = useState(false);
   const [displayScale, setDisplayScale] = useState(1);
   const [pdfData, setPdfData] = useState<{ data: ArrayBuffer } | null>(null);
-  const [loadSource, setLoadSource] = useState<LoadSource | null>(null);
+  // retryCount — счётчик для принудительного перезапуска useEffect при retry
+  const [retryCount, setRetryCount] = useState(0);
 
   const containerRef = useRef<HTMLDivElement>(null);
   const transformRef = useRef<ReactZoomPanPinchRef>(null);
@@ -150,18 +175,15 @@ export default function PdfViewer() {
     setError(false);
     setPdfData(null);
     setNumPages(0);
-    setLoadSource(null);
 
     fetchPdfWithCache(url)
-      .then(({ buffer, source }) => {
-        setPdfData({ data: buffer });
-        setLoadSource(source);
-      })
+      .then((buffer) => setPdfData({ data: buffer }))
       .catch(() => {
         setIsLoading(false);
         setError(true);
       });
-  }, [url]);
+    // retryCount в зависимостях → кнопка "Повторить" перезапускает fetch
+  }, [url, retryCount]);
 
   useEffect(() => {
     const update = () => {
@@ -188,6 +210,13 @@ export default function PdfViewer() {
     setError(true);
   }, []);
 
+  const handleRetry = () => {
+    setError(false);
+    setIsLoading(true);
+    setPdfData(null);
+    setRetryCount((c) => c + 1);
+  };
+
   const pageWidth = Math.max(containerWidth - PADDING * 2, 100);
 
   if (!url) {
@@ -203,7 +232,6 @@ export default function PdfViewer() {
 
   return (
     <div className={styles.page}>
-      {/* ── Header ── */}
       <header className={styles.header}>
         <button
           className={styles.headerBtn}
@@ -212,18 +240,7 @@ export default function PdfViewer() {
         >
           <ArrowLeft />
         </button>
-        <h1 className={styles.headerTitle}>
-          {name}
-          {/* Временный индикатор для отладки: 💾 кэш / 🌐 сеть */}
-          {loadSource && (
-            <span
-              className={styles.sourceTag}
-              title={loadSource === 'cache' ? 'Из кэша' : 'Из сети'}
-            >
-              {loadSource === 'cache' ? ' 💾' : ' 🌐'}
-            </span>
-          )}
-        </h1>
+        <h1 className={styles.headerTitle}>{name}</h1>
         <button
           className={styles.headerBtn}
           onClick={() => void downloadPdf(url, name)}
@@ -233,24 +250,17 @@ export default function PdfViewer() {
         </button>
       </header>
 
-      {/* ── Zoom + pan + scroll ── */}
       <div className={styles.canvasWrap} ref={containerRef}>
         <TransformWrapper
           ref={transformRef}
           initialScale={1}
           minScale={0.3}
           maxScale={5}
-          // Плавная инерция после жеста
           velocityAnimation={{ sensitivityTouch: 1, animationTime: 400 }}
-          // Двойной тап — сброс зума
           doubleClick={{ mode: 'reset' }}
-          // Колёсико мыши на десктопе
           wheel={{ step: 0.08 }}
-          // Pinch чувствительность
           pinch={{ step: 5 }}
-          // Не ограничиваем границами — пользователь может листать документ
           limitToBounds={false}
-          // Обновляем отображаемый процент в нижней панели
           onTransform={(ref) => setDisplayScale(ref.state.scale)}
         >
           <TransformComponent
@@ -261,7 +271,6 @@ export default function PdfViewer() {
               alignItems: 'center',
               padding: `${PADDING}px`,
               gap: '0',
-              // Минимальная ширина = вьюпорт, чтобы узкий контент был по центру
               minWidth: `${containerWidth}px`,
             }}
           >
@@ -293,31 +302,24 @@ export default function PdfViewer() {
           </TransformComponent>
         </TransformWrapper>
 
-        {/* Loader и error — поверх TransformWrapper */}
         {isLoading && (
           <div className={styles.overlay}>
             <div className={styles.spinner} />
             <p>Загрузка документа…</p>
           </div>
         )}
+
         {error && (
           <div className={styles.overlay}>
             <p className={styles.errorIcon}>⚠️</p>
             <p className={styles.errorText}>Не удалось загрузить документ</p>
-            <button
-              onClick={() => {
-                setError(false);
-                setIsLoading(true);
-              }}
-              className={styles.retryBtn}
-            >
+            <button onClick={handleRetry} className={styles.retryBtn}>
               Повторить
             </button>
           </div>
         )}
       </div>
 
-      {/* ── Zoom bar ── */}
       {!isLoading && !error && numPages > 0 && (
         <nav className={styles.bottomBar} aria-label="Масштаб">
           <button
@@ -331,7 +333,6 @@ export default function PdfViewer() {
             className={styles.zoomLabel}
             onClick={() => transformRef.current?.resetTransform()}
             aria-label="Сбросить масштаб"
-            title="Сбросить"
           >
             {Math.round(displayScale * 100)}%
           </button>

@@ -1,42 +1,32 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { idbKeys } from '../PdfViewer';
 import styles from './Debug.module.scss';
-
-interface DiagInfo {
-  online: boolean;
-  swSupported: boolean;
-  swController: string;
-  swState: string;
-  cachesSupported: boolean;
-  cacheKeys: string[];
-  pdfCacheUrls: string[];
-  cacheWriteTest: string;
-}
 
 const PDF_CACHE_NAME = 'pdf-manual-v1';
 
-async function runDiagnostics(): Promise<DiagInfo> {
-  const info: DiagInfo = {
+async function runDiagnostics() {
+  const info = {
     online: navigator.onLine,
     swSupported: 'serviceWorker' in navigator,
     swController: 'нет',
     swState: 'нет',
     cachesSupported: 'caches' in window,
-    cacheKeys: [],
-    pdfCacheUrls: [],
+    idbSupported: 'indexedDB' in window,
+    cacheKeys: [] as string[],
+    idbPdfUrls: [] as string[],
     cacheWriteTest: 'не проверялось',
+    idbWriteTest: 'не проверялось',
   };
 
-  // SW controller
   if ('serviceWorker' in navigator) {
     const ctrl = navigator.serviceWorker.controller;
     info.swController = ctrl ? `есть (${ctrl.scriptURL})` : 'нет (null)';
     try {
       const reg = await navigator.serviceWorker.getRegistration();
       if (reg) {
-        const state = reg.active?.state ?? 'нет active';
         const waiting = reg.waiting ? ' | waiting: есть' : '';
-        info.swState = `scope: ${reg.scope} | active: ${state}${waiting}`;
+        info.swState = `scope: ${reg.scope} | active: ${reg.active?.state ?? 'нет'}${waiting}`;
       } else {
         info.swState = 'регистрация не найдена';
       }
@@ -45,49 +35,42 @@ async function runDiagnostics(): Promise<DiagInfo> {
     }
   }
 
-  // Cache API
   if ('caches' in window) {
     try {
       info.cacheKeys = await caches.keys();
-
       const cache = await caches.open(PDF_CACHE_NAME);
-      const keys = await cache.keys();
-      info.pdfCacheUrls = keys.map((r) => r.url);
-
-      // Тест записи
-      const testKey = '/__cache-write-test__';
-      try {
-        await cache.put(testKey, new Response('ok', { status: 200 }));
-        const check = await cache.match(testKey);
-        const text = await check?.text();
-        await cache.delete(testKey);
-        info.cacheWriteTest =
-          text === 'ok' ? '✅ запись работает' : '❌ не совпало';
-      } catch (e) {
-        info.cacheWriteTest = `❌ ошибка записи: ${String(e)}`;
-      }
+      const testKey = '/__write-test__';
+      await cache.put(testKey, new Response('ok', { status: 200 }));
+      const check = await cache.match(testKey, { ignoreVary: true });
+      await cache.delete(testKey);
+      info.cacheWriteTest =
+        (await check?.text()) === 'ok' ? '✅ работает' : '❌ сбой';
     } catch (e) {
-      info.cacheKeys = [`ошибка: ${String(e)}`];
+      info.cacheWriteTest = `❌ ${String(e)}`;
+    }
+  }
+
+  if ('indexedDB' in window) {
+    try {
+      info.idbPdfUrls = await idbKeys();
+      info.idbWriteTest = info.idbPdfUrls !== null ? '✅ работает' : '❌ сбой';
+    } catch (e) {
+      info.idbWriteTest = `❌ ${String(e)}`;
     }
   }
 
   return info;
 }
 
+type Info = Awaited<ReturnType<typeof runDiagnostics>>;
+
 export default function Debug() {
   const navigate = useNavigate();
-  const [info, setInfo] = useState<DiagInfo | null>(null);
+  const [info, setInfo] = useState<Info | null>(null);
   const [loading, setLoading] = useState(true);
-  const [testMsg, setTestMsg] = useState('');
+  const [msg, setMsg] = useState('');
 
-  useEffect(() => {
-    runDiagnostics().then((d) => {
-      setInfo(d);
-      setLoading(false);
-    });
-  }, []);
-
-  const handleRefresh = () => {
+  const refresh = () => {
     setLoading(true);
     runDiagnostics().then((d) => {
       setInfo(d);
@@ -95,29 +78,17 @@ export default function Debug() {
     });
   };
 
-  const handleClearCache = async () => {
-    try {
-      await caches.delete(PDF_CACHE_NAME);
-      setTestMsg('Кэш PDF очищен');
-      handleRefresh();
-    } catch (e) {
-      setTestMsg(`Ошибка: ${String(e)}`);
-    }
-  };
+  useEffect(() => {
+    refresh();
+  }, []);
 
-  const handleTestCachePdf = async () => {
-    const testUrl =
-      'https://raw.githubusercontent.com/Slim21211/long-academy-bot-media/main/mission/%D0%9C%D0%B8%D1%81%D1%81%D0%B8%D1%8F%20%D0%B8%20%D1%86%D0%B5%D0%BD%D0%BD%D0%BE%D1%81%D1%82%D0%B8%20%D0%9A%D0%BE%D0%BC%D0%BF%D0%B0%D0%BD%D0%B8%D0%B8.pdf';
-    setTestMsg('Загружаю PDF для кэша...');
+  const clearIDB = async () => {
     try {
-      const cache = await caches.open(PDF_CACHE_NAME);
-      const response = await fetch(testUrl);
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      await cache.put(testUrl, response.clone());
-      setTestMsg('✅ PDF закэширован');
-      handleRefresh();
+      await indexedDB.deleteDatabase('pdf-store');
+      setMsg('IndexedDB очищен');
+      refresh();
     } catch (e) {
-      setTestMsg(`❌ Ошибка: ${String(e)}`);
+      setMsg(`Ошибка: ${String(e)}`);
     }
   };
 
@@ -128,18 +99,25 @@ export default function Debug() {
           ← Назад
         </button>
         <h1>Диагностика</h1>
-        <button onClick={handleRefresh} className={styles.refresh}>
+        <button onClick={refresh} className={styles.refresh}>
           🔄
         </button>
       </header>
 
       <div className={styles.content}>
         {loading && <p className={styles.loading}>Проверяю…</p>}
-
         {info && (
           <>
             <Section title="Сеть">
-              <Row label="Онлайн" value={info.online ? '✅ да' : '❌ нет'} />
+              <Row
+                label="navigator.onLine"
+                value={info.online ? '✅ true' : '❌ false'}
+              />
+              <Row
+                label="Примечание"
+                value="На iOS может быть неточным"
+                small
+              />
             </Section>
 
             <Section title="Service Worker">
@@ -148,28 +126,28 @@ export default function Debug() {
               <Row label="Состояние" value={info.swState} small />
             </Section>
 
-            <Section title="Cache API">
+            <Section title="Cache API (старый)">
               <Row
                 label="Поддержка"
                 value={info.cachesSupported ? '✅' : '❌'}
               />
-              <Row label="Тест записи" value={info.cacheWriteTest} />
+              <Row label="Запись" value={info.cacheWriteTest} />
               <Row
-                label="Все кэши"
-                value={
-                  info.cacheKeys.length > 0
-                    ? info.cacheKeys.join(', ')
-                    : 'пусто'
-                }
+                label="Кэши"
+                value={info.cacheKeys.join(', ') || 'пусто'}
                 small
               />
             </Section>
 
-            <Section title={`PDF кэш (${info.pdfCacheUrls.length} файлов)`}>
-              {info.pdfCacheUrls.length === 0 ? (
+            <Section
+              title={`IndexedDB (новый) — ${info.idbPdfUrls.length} PDF`}
+            >
+              <Row label="Поддержка" value={info.idbSupported ? '✅' : '❌'} />
+              <Row label="Доступ" value={info.idbWriteTest} />
+              {info.idbPdfUrls.length === 0 ? (
                 <p className={styles.empty}>Нет закэшированных PDF</p>
               ) : (
-                info.pdfCacheUrls.map((u) => (
+                info.idbPdfUrls.map((u) => (
                   <p key={u} className={styles.url}>
                     {decodeURIComponent(u.split('/').pop() ?? u)}
                   </p>
@@ -178,15 +156,11 @@ export default function Debug() {
             </Section>
 
             <div className={styles.actions}>
-              <button onClick={handleTestCachePdf} className={styles.btnGreen}>
-                Закэшировать тестовый PDF
-              </button>
-              <button onClick={handleClearCache} className={styles.btnRed}>
-                Очистить PDF кэш
+              <button onClick={clearIDB} className={styles.btnRed}>
+                Очистить IndexedDB
               </button>
             </div>
-
-            {testMsg && <p className={styles.testMsg}>{testMsg}</p>}
+            {msg && <p className={styles.testMsg}>{msg}</p>}
           </>
         )}
       </div>
