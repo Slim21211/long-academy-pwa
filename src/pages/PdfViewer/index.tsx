@@ -66,13 +66,12 @@ async function downloadPdf(url: string, name: string): Promise<void> {
   }
 }
 
-// ─── Constants ────────────────────────────────────────────────────────────────
 const SCALE_MIN = 0.5;
 const SCALE_MAX = 3.0;
 const SCALE_STEP = 0.25;
 const SCALE_DEFAULT = 1.0;
+const PADDING = 16; // px, с каждой стороны
 
-// ─── Component ────────────────────────────────────────────────────────────────
 export default function PdfViewer() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
@@ -85,15 +84,13 @@ export default function PdfViewer() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(false);
 
-  // Ширина контейнера нужна для рендера Page с правильными пропорциями
   const containerRef = useRef<HTMLDivElement>(null);
   const [containerWidth, setContainerWidth] = useState(320);
 
   useEffect(() => {
     const update = () => {
-      if (containerRef.current) {
+      if (containerRef.current)
         setContainerWidth(containerRef.current.clientWidth);
-      }
     };
     update();
     const ro = new ResizeObserver(update);
@@ -121,9 +118,9 @@ export default function PdfViewer() {
     setScale((s) => Math.max(SCALE_MIN, +(s - SCALE_STEP).toFixed(2)));
   const resetZoom = () => setScale(SCALE_DEFAULT);
 
-  // Ширина страницы = базовая ширина контейнера × масштаб.
-  // Базовая ширина берётся без паддингов — 32px (по 16px с каждой стороны).
-  const baseWidth = Math.max(containerWidth - 32, 100);
+  // Базовая ширина = контейнер минус паддинги.
+  // pageWidth — то, что получит <Page width={...} />.
+  const baseWidth = Math.max(containerWidth - PADDING * 2, 100);
   const pageWidth = Math.round(baseWidth * scale);
 
   if (!url) {
@@ -158,61 +155,67 @@ export default function PdfViewer() {
         </button>
       </header>
 
-      {/* ── Scrollable PDF area ── */}
+      {/* ── Scroll container ── */}
       <div className={styles.canvasWrap} ref={containerRef}>
-        {isLoading && (
-          <div className={styles.loader}>
-            <div className={styles.spinner} />
-            <p>Загрузка документа…</p>
-          </div>
-        )}
+        {/*
+          canvasInner — ключевой слой для корректного зума:
+          - min-width: 100%  → при узких страницах заполняет вьюпорт,
+                               align-items: center центрирует их
+          - width: max-content → при широких страницах расширяется под контент,
+                               canvasWrap получает горизонтальный скролл,
+                               левый край всегда доступен (нет negative overflow)
+        */}
+        <div className={styles.canvasInner}>
+          {isLoading && (
+            <div className={styles.loader}>
+              <div className={styles.spinner} />
+              <p>Загрузка документа…</p>
+            </div>
+          )}
 
-        {error && (
-          <div className={styles.errorBox}>
-            <p className={styles.errorIcon}>⚠️</p>
-            <p className={styles.errorText}>Не удалось загрузить документ</p>
-            <button
-              onClick={() => {
-                setError(false);
-                setIsLoading(true);
-              }}
-              className={styles.retryBtn}
-            >
-              Повторить
-            </button>
-          </div>
-        )}
-
-        {!error && (
-          <Document
-            file={url}
-            onLoadSuccess={onDocumentLoadSuccess}
-            onLoadError={onDocumentLoadError}
-            loading={null}
-          >
-            {/* Рендерим все страницы сразу — документы 2–5 стр, нет смысла в виртуализации */}
-            {Array.from({ length: numPages }, (_, i) => (
-              <div
-                key={i}
-                // margin: 0 auto центрирует страницу когда она уже контейнера.
-                // Когда шире — страница прижата к левому краю и вся правая часть
-                // доступна скроллом. Это фикс бага с недоступной левой частью
-                // при зуме (align-items: center на flex-контейнере давал overflow
-                // симметрично в обе стороны, а scrollLeft не может быть < 0).
-                className={styles.pageWrap}
-                style={{ width: pageWidth }}
+          {error && (
+            <div className={styles.errorBox}>
+              <p className={styles.errorIcon}>⚠️</p>
+              <p className={styles.errorText}>Не удалось загрузить документ</p>
+              <button
+                onClick={() => {
+                  setError(false);
+                  setIsLoading(true);
+                }}
+                className={styles.retryBtn}
               >
-                <Page
-                  pageNumber={i + 1}
-                  width={pageWidth}
-                  renderTextLayer={true}
-                  renderAnnotationLayer={false}
-                  loading={null}
-                />
-              </div>
-            ))}
-          </Document>
-        )}
+                Повторить
+              </button>
+            </div>
+          )}
+
+          {!error && (
+            <Document
+              file={url}
+              onLoadSuccess={onDocumentLoadSuccess}
+              onLoadError={onDocumentLoadError}
+              loading={null}
+            >
+              {Array.from({ length: numPages }, (_, i) => (
+                <div
+                  key={i}
+                  className={styles.pageWrap}
+                  style={{ width: pageWidth }}
+                >
+                  <Page
+                    pageNumber={i + 1}
+                    width={pageWidth}
+                    renderTextLayer={true}
+                    renderAnnotationLayer={false}
+                    loading={null}
+                  />
+                  {/* Тонкий разделитель между страницами вместо белого провала */}
+                  {i < numPages - 1 && <div className={styles.pageDivider} />}
+                </div>
+              ))}
+            </Document>
+          )}
+        </div>
       </div>
 
       {/* ── Zoom bar ── */}
@@ -226,16 +229,14 @@ export default function PdfViewer() {
           >
             −
           </button>
-
           <button
             className={styles.zoomLabel}
             onClick={resetZoom}
+            title="Сбросить масштаб"
             aria-label="Сбросить масштаб"
-            title="Сбросить"
           >
             {Math.round(scale * 100)}%
           </button>
-
           <button
             className={styles.navBtn}
             onClick={zoomIn}
