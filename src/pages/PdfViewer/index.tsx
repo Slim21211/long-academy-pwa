@@ -181,6 +181,11 @@ export default function PdfViewer() {
             {!error && (
               <Document
                 file={url}
+                options={{
+                  disableRange: true,
+                  disableStream: true,
+                  disableAutoFetch: true,
+                }}
                 onLoadSuccess={onDocumentLoadSuccess}
                 onLoadError={onDocumentLoadError}
                 loading={null}
