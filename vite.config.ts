@@ -10,7 +10,7 @@ export default defineConfig({
       includeAssets: ['favicon.svg'],
       manifest: {
         name: 'Академия Долголетия',
-        short_name: 'Академия Долголетия',
+        short_name: 'Академия',
         description: 'Корпоративная база знаний для сотрудников пансионатов',
         theme_color: '#2D7A50',
         background_color: '#F4F7F5',
@@ -42,14 +42,24 @@ export default defineConfig({
         globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
         runtimeCaching: [
           {
-            urlPattern:
-              /^https:\/\/raw\.githubusercontent\.com\/.+\.pdf(\?.*)?$/,
+            // PDF-файлы с GitHub raw CDN
+            // ignoreVary: true — ключевой фикс: GitHub отдаёт Vary: Accept-Encoding,
+            // из-за чего Workbox не находит кэш при повторном запросе
+            // (заголовки запроса немного отличаются → Vary-матч не проходит).
+            urlPattern: /^https:\/\/raw\.githubusercontent\.com\/.+\.pdf/,
             handler: 'CacheFirst',
             options: {
               cacheName: 'pdf-cache',
+              fetchOptions: {
+                mode: 'cors',
+                credentials: 'omit',
+              },
+              matchOptions: {
+                ignoreVary: true,
+              },
               expiration: {
                 maxEntries: 100,
-                maxAgeSeconds: 60 * 60 * 24 * 30,
+                maxAgeSeconds: 60 * 60 * 24 * 30, // 30 дней
               },
               cacheableResponse: { statuses: [0, 200] },
             },
