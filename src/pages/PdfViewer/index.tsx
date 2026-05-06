@@ -77,15 +77,22 @@ async function fetchPdfWithCache(
 ): Promise<{ buffer: ArrayBuffer; source: LoadSource }> {
   // ── 1. Читаем из кэша ──────────────────────────────────────────────────────
   if ('caches' in window) {
-    try {
-      const cache = await caches.open(PDF_CACHE_NAME);
-      const cached = await cache.match(url);
-      if (cached) {
-        const buffer = await cached.arrayBuffer();
-        return { buffer, source: 'cache' };
+    // Проверяем оба кэша: наш ручной + старый Workbox (pdf-cache)
+    for (const cacheName of [PDF_CACHE_NAME, 'pdf-cache']) {
+      try {
+        const cache = await caches.open(cacheName);
+        // ignoreVary: true — ОБЯЗАТЕЛЬНО.
+        // GitHub отдаёт Vary: Accept-Encoding. Без этого флага cache.match
+        // сравнивает заголовки запроса с сохранёнными — они чуть отличаются
+        // → возвращает null даже когда файл физически есть в кэше.
+        const cached = await cache.match(url, { ignoreVary: true });
+        if (cached) {
+          const buffer = await cached.arrayBuffer();
+          return { buffer, source: 'cache' };
+        }
+      } catch {
+        // этот кэш не сработал — пробуем следующий
       }
-    } catch {
-      // Cache API недоступен — идём в сеть
     }
   }
 
