@@ -5,7 +5,6 @@ import 'react-pdf/dist/Page/TextLayer.css';
 import 'react-pdf/dist/Page/AnnotationLayer.css';
 import styles from './PdfViewer.module.scss';
 
-// Worker через CDN — версия совпадает с установленным pdfjs-dist
 pdfjs.GlobalWorkerOptions.workerSrc = new URL(
   'pdfjs-dist/build/pdf.worker.min.mjs',
   import.meta.url
@@ -48,40 +47,6 @@ function DownloadIcon() {
   );
 }
 
-function ChevronLeft() {
-  return (
-    <svg
-      width="20"
-      height="20"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2.5"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <path d="M15 18l-6-6 6-6" />
-    </svg>
-  );
-}
-
-function ChevronRight() {
-  return (
-    <svg
-      width="20"
-      height="20"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2.5"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <path d="M9 18l6-6-6-6" />
-    </svg>
-  );
-}
-
 // ─── Download ─────────────────────────────────────────────────────────────────
 async function downloadPdf(url: string, name: string): Promise<void> {
   try {
@@ -101,12 +66,13 @@ async function downloadPdf(url: string, name: string): Promise<void> {
   }
 }
 
-// ─── Component ────────────────────────────────────────────────────────────────
+// ─── Constants ────────────────────────────────────────────────────────────────
 const SCALE_MIN = 0.5;
 const SCALE_MAX = 3.0;
 const SCALE_STEP = 0.25;
 const SCALE_DEFAULT = 1.0;
 
+// ─── Component ────────────────────────────────────────────────────────────────
 export default function PdfViewer() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
@@ -115,15 +81,14 @@ export default function PdfViewer() {
   const name = searchParams.get('name') ?? 'Документ';
 
   const [numPages, setNumPages] = useState<number>(0);
-  const [currentPage, setCurrentPage] = useState(1);
   const [scale, setScale] = useState(SCALE_DEFAULT);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(false);
 
+  // Ширина контейнера нужна для рендера Page с правильными пропорциями
   const containerRef = useRef<HTMLDivElement>(null);
-  const [containerWidth, setContainerWidth] = useState<number>(320);
+  const [containerWidth, setContainerWidth] = useState(320);
 
-  // Отслеживаем ширину контейнера для адаптивного рендера страницы
   useEffect(() => {
     const update = () => {
       if (containerRef.current) {
@@ -150,13 +115,16 @@ export default function PdfViewer() {
     setError(true);
   }, []);
 
-  const goToPrev = () => setCurrentPage((p) => Math.max(1, p - 1));
-  const goToNext = () => setCurrentPage((p) => Math.min(numPages, p + 1));
   const zoomIn = () =>
     setScale((s) => Math.min(SCALE_MAX, +(s + SCALE_STEP).toFixed(2)));
   const zoomOut = () =>
     setScale((s) => Math.max(SCALE_MIN, +(s - SCALE_STEP).toFixed(2)));
   const resetZoom = () => setScale(SCALE_DEFAULT);
+
+  // Ширина страницы = базовая ширина контейнера × масштаб.
+  // Базовая ширина берётся без паддингов — 32px (по 16px с каждой стороны).
+  const baseWidth = Math.max(containerWidth - 32, 100);
+  const pageWidth = Math.round(baseWidth * scale);
 
   if (!url) {
     return (
@@ -168,9 +136,6 @@ export default function PdfViewer() {
       </div>
     );
   }
-
-  // Ширина страницы = ширина контейнера × масштаб
-  const pageWidth = Math.round(containerWidth * scale);
 
   return (
     <div className={styles.page}>
@@ -193,7 +158,7 @@ export default function PdfViewer() {
         </button>
       </header>
 
-      {/* ── PDF canvas ── */}
+      {/* ── Scrollable PDF area ── */}
       <div className={styles.canvasWrap} ref={containerRef}>
         {isLoading && (
           <div className={styles.loader}>
@@ -225,75 +190,60 @@ export default function PdfViewer() {
             onLoadError={onDocumentLoadError}
             loading={null}
           >
-            <div
-              className={styles.pageWrap}
-              style={{ width: pageWidth, maxWidth: '100%' }}
-            >
-              <Page
-                pageNumber={currentPage}
-                width={pageWidth}
-                renderTextLayer={true}
-                renderAnnotationLayer={false}
-                loading={null}
-              />
-            </div>
+            {/* Рендерим все страницы сразу — документы 2–5 стр, нет смысла в виртуализации */}
+            {Array.from({ length: numPages }, (_, i) => (
+              <div
+                key={i}
+                // margin: 0 auto центрирует страницу когда она уже контейнера.
+                // Когда шире — страница прижата к левому краю и вся правая часть
+                // доступна скроллом. Это фикс бага с недоступной левой частью
+                // при зуме (align-items: center на flex-контейнере давал overflow
+                // симметрично в обе стороны, а scrollLeft не может быть < 0).
+                className={styles.pageWrap}
+                style={{ width: pageWidth }}
+              >
+                <Page
+                  pageNumber={i + 1}
+                  width={pageWidth}
+                  renderTextLayer={true}
+                  renderAnnotationLayer={false}
+                  loading={null}
+                />
+              </div>
+            ))}
           </Document>
         )}
       </div>
 
-      {/* ── Bottom bar ── */}
+      {/* ── Zoom bar ── */}
       {!isLoading && !error && numPages > 0 && (
-        <nav className={styles.bottomBar} aria-label="Навигация по документу">
-          {/* Листание страниц */}
-          <div className={styles.navGroup}>
-            <button
-              className={styles.navBtn}
-              onClick={goToPrev}
-              disabled={currentPage <= 1}
-              aria-label="Предыдущая страница"
-            >
-              <ChevronLeft />
-            </button>
-            <span className={styles.pageInfo}>
-              {currentPage} / {numPages}
-            </span>
-            <button
-              className={styles.navBtn}
-              onClick={goToNext}
-              disabled={currentPage >= numPages}
-              aria-label="Следующая страница"
-            >
-              <ChevronRight />
-            </button>
-          </div>
+        <nav className={styles.bottomBar} aria-label="Масштаб">
+          <button
+            className={styles.navBtn}
+            onClick={zoomOut}
+            disabled={scale <= SCALE_MIN}
+            aria-label="Уменьшить"
+          >
+            −
+          </button>
 
-          {/* Масштаб */}
-          <div className={styles.zoomGroup}>
-            <button
-              className={styles.navBtn}
-              onClick={zoomOut}
-              disabled={scale <= SCALE_MIN}
-              aria-label="Уменьшить"
-            >
-              −
-            </button>
-            <button
-              className={styles.zoomLabel}
-              onClick={resetZoom}
-              aria-label="Сбросить масштаб"
-              title="Сбросить"
-            >
-              {Math.round(scale * 100)}%
-            </button>
-            <button
-              className={styles.navBtn}
-              onClick={zoomIn}
-              disabled={scale >= SCALE_MAX}
-              aria-label="Увеличить"
-            >
-              +
-            </button>
-          </div>
+          <button
+            className={styles.zoomLabel}
+            onClick={resetZoom}
+            aria-label="Сбросить масштаб"
+            title="Сбросить"
+          >
+            {Math.round(scale * 100)}%
+          </button>
+
+          <button
+            className={styles.navBtn}
+            onClick={zoomIn}
+            disabled={scale >= SCALE_MAX}
+            aria-label="Увеличить"
+          >
+            +
+          </button>
         </nav>
       )}
     </div>

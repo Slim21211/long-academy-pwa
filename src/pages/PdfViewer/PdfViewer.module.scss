@@ -1,14 +1,13 @@
 @use '../../styles/variables' as *;
 
-$bottom-bar-height: 60px;
+$bottom-bar-height: 56px;
 $header-height-viewer: 56px;
 
-// ─── Page shell ───────────────────────────────────────────────────────────────
 .page {
   display: flex;
   flex-direction: column;
   height: 100dvh;
-  background: #525659; // нейтральный фон как в PDF.js
+  background: #525659;
   overflow: hidden;
 }
 
@@ -18,13 +17,12 @@ $header-height-viewer: 56px;
   align-items: center;
   gap: $space-2;
   padding: 0 $space-3;
-  height: $header-height-viewer;
+  padding-top: env(safe-area-inset-top, 0px);
+  height: calc(#{$header-height-viewer} + env(safe-area-inset-top, 0px));
   background: $color-surface;
   border-bottom: 1px solid $color-border-light;
   box-shadow: $shadow-sm;
   flex-shrink: 0;
-  padding-top: env(safe-area-inset-top, 0px);
-  height: calc(#{$header-height-viewer} + env(safe-area-inset-top, 0px));
 }
 
 .headerBtn {
@@ -44,7 +42,7 @@ $header-height-viewer: 56px;
     transform $transition-fast;
 
   &:hover {
-    background: darken(#ebf5ee, 4%);
+    background: color-mix(in srgb, #ebf5ee 90%, #2d7a50 10%);
   }
   &:active {
     transform: scale(0.92);
@@ -69,17 +67,20 @@ $header-height-viewer: 56px;
 // ─── Canvas area ──────────────────────────────────────────────────────────────
 .canvasWrap {
   flex: 1;
+  // Вертикальный и горизонтальный скролл
   overflow: auto;
+  // НЕ используем align-items: center — это ломает горизонтальный скролл при зуме
+  // (переполнение уходит симметрично влево и вправо, но scrollLeft ≥ 0 всегда,
+  // поэтому левая часть недоступна). Вместо этого центрируем через margin: 0 auto
+  // на .pageWrap — там это работает корректно в обоих направлениях.
   display: flex;
   flex-direction: column;
-  align-items: center;
-  padding: $space-4;
-  gap: $space-3;
+  align-items: flex-start;
+  padding: $space-4 $space-4 $space-6;
+  gap: $space-4;
+  // Минимальная ширина = ширина контента, чтобы горизонтальный скролл работал
+  min-width: min-content;
 
-  // Когда масштаб > 100% и контент шире контейнера — горизонтальный скролл
-  overflow-x: auto;
-
-  // Скрыть scrollbar визуально на мобилке, но оставить функциональность
   @include mobile {
     scrollbar-width: none;
     &::-webkit-scrollbar {
@@ -89,18 +90,18 @@ $header-height-viewer: 56px;
 }
 
 .pageWrap {
-  // Тень вокруг страницы PDF
+  // margin: 0 auto — центрирует страницу когда она уже контейнера,
+  // и прижимает к левому краю (не обрезая) когда она шире.
+  margin: 0 auto;
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
   background: white;
-  line-height: 0; // убирает gap под canvas
+  line-height: 0;
+  flex-shrink: 0;
 
-  // react-pdf рендерит canvas — убираем возможные зазоры
   canvas {
     display: block;
-    max-width: 100%;
   }
 
-  // TextLayer стили (переопределяем дефолтные из react-pdf)
   :global(.react-pdf__Page__textContent) {
     user-select: text;
     -webkit-user-select: text;
@@ -116,6 +117,7 @@ $header-height-viewer: 56px;
   padding: $space-16 $space-4;
   color: rgba(255, 255, 255, 0.7);
   font-size: $font-size-sm;
+  width: 100%;
 }
 
 .spinner {
@@ -140,6 +142,7 @@ $header-height-viewer: 56px;
   gap: $space-3;
   padding: $space-16 $space-4;
   text-align: center;
+  width: 100%;
 }
 
 .errorIcon {
@@ -186,11 +189,12 @@ $header-height-viewer: 56px;
   cursor: pointer;
 }
 
-// ─── Bottom navigation bar ────────────────────────────────────────────────────
+// ─── Zoom bar ─────────────────────────────────────────────────────────────────
 .bottomBar {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: center;
+  gap: $space-3;
   padding: 0 $space-4;
   padding-bottom: env(safe-area-inset-bottom, 0px);
   height: calc(#{$bottom-bar-height} + env(safe-area-inset-bottom, 0px));
@@ -198,24 +202,16 @@ $header-height-viewer: 56px;
   border-top: 1px solid $color-border-light;
   box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.06);
   flex-shrink: 0;
-  gap: $space-2;
-}
-
-.navGroup,
-.zoomGroup {
-  display: flex;
-  align-items: center;
-  gap: $space-1;
 }
 
 .navBtn {
-  width: 38px;
-  height: 38px;
+  width: 44px;
+  height: 44px;
   border-radius: $radius-sm;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 18px;
+  font-size: 22px;
   font-weight: $font-weight-bold;
   font-family: inherit;
   color: $color-text;
@@ -236,32 +232,24 @@ $header-height-viewer: 56px;
   }
 
   &:not(:disabled):active {
-    transform: scale(0.92);
+    transform: scale(0.9);
   }
 }
 
-.pageInfo {
-  font-size: $font-size-sm;
-  font-weight: $font-weight-semibold;
-  color: $color-text;
-  min-width: 56px;
-  text-align: center;
-}
-
 .zoomLabel {
-  font-size: $font-size-xs;
+  font-size: $font-size-base;
   font-weight: $font-weight-bold;
   font-family: inherit;
   color: $color-primary;
-  min-width: 44px;
+  min-width: 60px;
   text-align: center;
   cursor: pointer;
-  padding: $space-1 $space-2;
+  padding: $space-2 $space-3;
   border-radius: $radius-sm;
   background: $color-primary-bg;
   transition: background $transition-fast;
 
   &:hover {
-    background: darken(#ebf5ee, 5%);
+    background: color-mix(in srgb, #ebf5ee 85%, #2d7a50 15%);
   }
 }
