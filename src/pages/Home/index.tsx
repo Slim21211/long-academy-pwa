@@ -91,9 +91,9 @@ export default function Home() {
           ))}
         </nav>
 
-        <button className={styles.debugLink} onClick={() => navigate('/debug')}>
+        {/* <button className={styles.debugLink} onClick={() => navigate('/debug')}>
           🔧 Диагностика
-        </button>
+        </button> */}
       </main>
     </div>
   );
